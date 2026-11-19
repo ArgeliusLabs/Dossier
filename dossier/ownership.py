@@ -56,7 +56,14 @@ def parse_listing_publisher(raw: str) -> dict:
         m = re.search(r"mailto:([^\"'?>\s]+@[^\"'?>\s]+)", raw)
         if m:
             out["email"] = html.unescape(m.group(1))
+    pub = (out.get("publisher") or "").strip()
+    if pub.lower() in _NOT_A_NAME or len(pub) < 2 or len(pub) > 80:
+        out.pop("publisher", None)   # page chrome mistaken for a name (e.g. a "Follow" button)
     return out
+
+
+_NOT_A_NAME = {"follow", "website", "email", "phone", "report", "developer", "offered by", "privacy policy",
+               "support", "add to chrome", "add to firefox", "share", "more", "see all", "contact", "details"}
 
 
 def listing_urls(browser: str, ext_id: str, slug: str = "") -> list[str]:
@@ -188,6 +195,11 @@ def ownership_findings(hist: dict, current: dict) -> list[Finding]:
                         "The listed publisher name changed over time but the contact domain stayed the same "
                         f"({_domain(tl[-1]) or 'unknown'}), which usually means a rename rather than a sale.", evidence)]
     prev, cur = by_org[-2], by_org[-1]
+    if prev["from"] == prev["to"] and len(by_org) == 2:
+        # The "previous owner" rests on a single archived snapshot: too thin to call it a sale (parsing noise).
+        return [Finding("pub.history_unclear", "trust", "info", "Publisher history inconclusive",
+                        "Only one archived snapshot shows a different publisher, which is not enough to establish a change "
+                        "of owner.", evidence)]
     pe, ce = prev["entry"], cur["entry"]
     when = f"between {prev['to']} and {cur['from']}"
     recent = cur["from"] == "today" or _is_recent(cur["from"])

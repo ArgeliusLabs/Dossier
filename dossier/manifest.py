@@ -269,8 +269,9 @@ def analyze_manifest(manifest: dict, permissions: list[Permission]) -> list[Find
 
     # --- Remote code / CSP --------------------------------------------------------------
     f += analyze_csp(manifest)
+    is_firefox = bool((manifest.get("browser_specific_settings") or manifest.get("applications") or {}).get("gecko"))
     if mv == 2:
-        f.append(Finding("mv.v2", "remote_code", "medium",
+        f.append(Finding("mv.v2", "remote_code", "low" if is_firefox else "medium",
                          "Uses legacy Manifest V2",
                          "Manifest V2 extensions are allowed to load and run remotely hosted code and use blocking webRequest. "
                          "Chrome has phased MV2 out; on Firefox it is still supported. Code you review today may not be what runs tomorrow.",

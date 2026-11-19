@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .knowledge import (
-    BENIGN_DYNAMIC_CODE, CDN_DOMAINS, CODE_HOSTING, LIBRARY_FILENAME, LIBRARY_SIGNATURES,
+    BENIGN_DYNAMIC_CODE, CDN_DOMAINS, CODE_HOSTING, FILTER_LIST_HOSTS, LIBRARY_FILENAME, LIBRARY_SIGNATURES,
     NOISE_URL_PATTERNS, PLACEHOLDER_HOST, STORE_DOMAINS, TRACKERS, registrable_domain,
 )
 from .models import Endpoint, Evidence, Finding, Library
@@ -432,6 +432,10 @@ def _is_valid_host(host: str) -> bool:
 def classify_host(host: str, url: str, first_party: set[str]) -> tuple[str, str]:
     h = host.lower()
     hp = (h + urllib_path(url)).lower()
+    if h in ("raw.githubusercontent.com", "github.com", "objects.githubusercontent.com") or h.endswith(".github.io"):
+        org = h.split(".")[0] if h.endswith(".github.io") else (urllib_path(url).strip("/").split("/") or [""])[0]
+        if "gh:" + re.sub(r"[^a-z0-9]", "", org.lower()) in first_party:
+            return "first_party", "Publisher's own GitHub"
     for key, (cat, label) in TRACKERS.items():
         if "/" in key:
             if hp.startswith(key) or ("." + key) in hp:
@@ -446,6 +450,8 @@ def classify_host(host: str, url: str, first_party: set[str]) -> tuple[str, str]
             return "code_hosting", label
     if h in CDN_DOMAINS:
         return "cdn", CDN_DOMAINS[h]
+    if h in FILTER_LIST_HOSTS or any(hp.startswith(k) for k in FILTER_LIST_HOSTS if "/" in k):
+        return "filter_list", "Block-list download"
     if h in STORE_DOMAINS or h.endswith(".mozilla.org") or h.endswith(".mozilla.net"):
         return "store", "Browser vendor / store"
     own = registrable_domain(h) in first_party
@@ -615,9 +621,31 @@ def _build_rule_findings(hits: dict[str, list[tuple[JsFile, int, int]]]) -> list
         detail = r.detail + (f" Seen {len(items)} time(s) across {files} file(s)." if len(items) > 1 else "")
         if bundle_only:
             detail += " All hits are inside bundled code, which may include third-party library code."
-        out.append(Finding(r.id, r.category, r.severity, r.title, detail, evidence,
-                           confidence=conf, opsec=r.opsec, total_hits=len(items)))
+        sev, title, opsec = r.severity, r.title, r.opsec
+        if rid == "data.hook_network" and not any(
+                _RELAY_SINK.search(js.code, max(0, s - 3000), e + 3000) for js, s, e in items):
+            # Hooking without any way to pass captured data back out is how blockers neutralise ads/trackers.
+            sev, conf, opsec = "low", "medium", ""
+            title = "Overrides the website's network functions (no data relayed out)"
+            detail = ("Page scripts replace fetch/XMLHttpRequest, but the code around the hook has no way to send what "
+                      "it sees back to the extension or a server (no postMessage, custom events, extension messaging "
+                      "or beacons). This is how content blockers neutralise ads and trackers. It still means the code "
+                      f"runs inside the page and can alter what the site receives. Seen in {files} file(s).")
+        elif rid == "code.exec_code_string" and not any(re.search(r"fetch\s*\(|XMLHttpRequest", js.code) for js, _, _ in items):
+            sev = "medium"
+            detail += (" The files that do this don't download anything themselves, so the injected code is most likely "
+                       "built into the extension (e.g. content-blocker scriptlets) rather than fetched from a server.")
+        elif rid == "code.user_scripts" and not any(re.search(r"fetch\s*\(|XMLHttpRequest", js.code) for js, _, _ in items):
+            sev = "low"
+            detail += (" The files that register them don't download anything themselves, so these are most likely "
+                       "scripts built from your own settings (for example custom filters), not code fetched from a server.")
+        out.append(Finding(r.id, r.category, sev, title, detail, evidence,
+                           confidence=conf, opsec=opsec, total_hits=len(items)))
     return out
+
+
+# Ways for code running in the page to hand captured data to the extension or a server.
+_RELAY_SINK = re.compile(r"postMessage\s*\(|new\s+CustomEvent\s*\(|runtime\s*\.\s*(?:sendMessage|connect)\s*\(|sendBeacon\s*\(")
 
 
 def _merge_extra(items: list[Finding]) -> list[Finding]:
@@ -792,6 +820,12 @@ def _collect_endpoints(js: JsFile, endpoints: dict[str, Endpoint], first_party: 
     hosts = {re.sub(r"^[a-z]+://([^/:?#]+).*$", r"\1", u, flags=re.I) for _, u in found}
     if len(hosts) > BULK_HOSTS or js.is_data:
         noise["URLs in bulk data files (filter lists, site databases)"] += len(found)
+        return
+    # Files that web pages load from the extension (e.g. ad-blocker "surrogate" stubs named after tracker scripts)
+    # mention tracker hosts without the extension contacting them.
+    page_resource = bool(re.search(r"(^|/)(web_accessible_resources|war|redirect-resources|surrogates?)/", js.rel, re.I))
+    if page_resource:
+        noise["hosts named in page-facing stub resources (e.g. blocker surrogates)"] += len(found)
         return
     for off, url in found:
         req = bool(REQUEST_CONTEXT.search(js.code[max(0, off - 160):off + 1]))

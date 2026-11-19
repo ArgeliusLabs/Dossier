@@ -27,11 +27,11 @@ come from the code. Rule IDs appear in `--json` output and in history snapshots.
 | `csp.unsafe_eval` | high | CSP allows `eval()` |
 | `code.remote_script_tag` | high | Extension page loads a remote `<script>` |
 | `code.remote_import` | high | `importScripts`/`import()` from an http(s) URL |
-| `code.exec_code_string` | high | Injects code strings into pages (`executeScript({code})`) |
+| `code.exec_code_string` | high/medium | Injects code strings into pages (`executeScript({code})`); medium when the same files download nothing |
 | `code.fetch_eval` | high | Same file downloads data and runs dynamic code |
 | `code.eval` | medium | `eval` with a non-literal argument |
 | `code.new_function` | medium | `new Function` with a non-literal argument |
-| `code.user_scripts` | medium | Registers user scripts at runtime |
+| `code.user_scripts` | medium/low | Registers user scripts at runtime; low when the files download nothing (scripts built from your own settings) |
 | `code.script_inject` | medium | Adds external `<script>` tags to pages |
 | `ui.remote_iframe` | medium | Extension UI is loaded from a remote website |
 | `mv.v2` | medium | Legacy Manifest V2 (remote code allowed) |
@@ -41,7 +41,7 @@ come from the code. Rule IDs appear in `--json` output and in history snapshots.
 
 | Rule | Severity | Finding |
 |---|---|---|
-| `data.hook_network` | high | Overrides the page's `fetch`/`XMLHttpRequest` to read API responses |
+| `data.hook_network` | high/low | Overrides the page's `fetch`/`XMLHttpRequest`. High when the code nearby can relay data out (postMessage, custom events, extension messaging, beacons); low when it can't, which is how blockers neutralise ads |
 | `data.history_api` | high | Queries your browsing history |
 | `data.request_body` | high | Reads form/POST bodies you submit |
 | `data.profile_email` | high | Reads the browser profile's email address |

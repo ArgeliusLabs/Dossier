@@ -158,9 +158,9 @@ def _weighted(findings: list[Finding]) -> float:
         elif f.confidence == "low":
             w *= 0.4
         if f.llm_verdict == "likely_benign":
-            w *= 0.3
+            w *= 0.0 if f.category == "trust" else 0.15
         elif f.llm_verdict == "downgrade":
-            w *= 0.6
+            w *= 0.45
         vals.append(w)
     vals.sort(reverse=True)
     total, factor = 0.0, 1.0
@@ -170,13 +170,51 @@ def _weighted(findings: list[Finding]) -> float:
     return min(100.0, total)
 
 
-def compute_scores(findings: list[Finding]) -> dict:
+RED_FLAG_RULES = {"intel.known_bad", "pub.owner_changed", "pub.removed", "pub.disabled", "data.disclosed_collection",
+                  "data.consent_flow", "net.analytics", "net.advertising", "net.session_recording", "net.affiliate",
+                  "net.exfil_channel", "code.obfuscated", "update.offstore", "web.reported_concerns"}
+MAX_CREDIT = 12
+
+
+def trust_credits(findings: list[Finding], ctx: dict | None, behaviour: float) -> list[tuple[str, int]]:
+    """Reassuring evidence that offsets *capability* for extensions whose code looks clean.
+
+    Only applies when nothing alarming was found: no red flags, behaviour score under 25. It can never make up
+    for bad behaviour; it only stops a well-established, well-behaved extension from being scored like an unknown one.
+    """
+    ctx = ctx or {}
+    active = {f.rule for f in findings if f.llm_verdict != "likely_benign"}
+    if behaviour >= 25 or active & RED_FLAG_RULES:
+        return []
+    out: list[tuple[str, int]] = []
+    years = ctx.get("stable_publisher_years") or 0
+    if years >= 2:
+        out.append((f"Same publisher for {int(years)}+ years in archived store listings", 5))
+    if ctx.get("recommended"):
+        out.append(("Mozilla Recommended: every release is code-reviewed by Mozilla", 5))
+    if ctx.get("big_user_base"):
+        out.append((f"Large user base ({ctx.get('users', 0):,}): problems get noticed quickly", 3))
+    if ctx.get("open_source"):
+        out.append(("Open-source project (code can be independently reviewed)", 2))
+    if ctx.get("clean_reputation"):
+        out.append(("Web search found no reports of problems", 2))
+    if out:   # absence of tracking only reassures when there is also positive evidence about who is behind it
+        out.append(("No analytics, ad or tracking services found in the code", 3))
+    return out
+
+
+def compute_scores(findings: list[Finding], ctx: dict | None = None) -> dict:
     cap = _weighted([f for f in findings if f.category in CAPABILITY_CATS])
     beh = _weighted([f for f in findings if f.category not in CAPABILITY_CATS and f.category != "trust"])
     trust = _weighted([f for f in findings if f.category == "trust"])
     overall = min(100, round(0.4 * cap + 0.6 * beh + 0.5 * trust + 0.2 * min(cap, beh)))
     # Broad access alone is a real exposure even when the code looks clean (one update changes that).
     overall = max(overall, round(0.55 * cap))
+    credits = trust_credits(findings, ctx, beh)
+    credit = min(MAX_CREDIT, sum(c for _, c in credits))
+    if credit:
+        # Established and clean: let the reassurance count, but broad access keeps a floor.
+        overall = max(overall - credit, round(0.35 * cap))
     if any(f.severity == "critical" and f.confidence == "high" and f.llm_verdict != "likely_benign"
            and f.category not in CAPABILITY_CATS for f in findings):
         overall = max(overall, 70)
@@ -189,7 +227,8 @@ def compute_scores(findings: list[Finding]) -> dict:
     else:
         verdict = "Low"
     return {"capability": round(cap), "behaviour": round(beh), "trust_penalty": round(trust),
-            "overall": overall, "verdict": verdict}
+            "overall": overall, "verdict": verdict, "credits": credits, "credit_applied": credit,
+            "proportionate": bool(credit) and cap >= 30}
 
 
 def assign_ids(findings: list[Finding]) -> list[Finding]:

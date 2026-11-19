@@ -30,12 +30,16 @@ Search the web (news, security blogs, researcher posts, Reddit/forums, GitHub is
 
 Rules: only report what sources actually say, cite every claim, and say plainly when you found nothing. Do not
 repeat marketing copy. Ignore pages that merely list or review features.
+Only list concerns about THIS extension (this ID / this publisher). Do NOT list: fake or copycat extensions that
+imitate it, antivirus false positives that were retracted, general criticism of a whole category, or problems with a
+different product that shares the name, or performance/bug complaints. Concerns must be about security, privacy,
+data handling, ownership or store enforcement. If those are the only things you found, return no concerns.
 
 Reply with ONLY a JSON object:
 {{
   "summary": "2-4 plain sentences for an investigator",
   "ownership_change": {{"reported": true|false, "detail": "who/when, or empty"}},
-  "concerns": [{{"claim": "short claim", "severity": "high|medium|low", "source_title": "...", "url": "https://...", "date": "YYYY-MM or empty"}}],
+  "concerns": [{{"claim": "short claim", "severity": "high|medium|low", "about_this_extension": true|false, "source_title": "...", "url": "https://...", "date": "YYYY-MM or empty"}}],
   "reassurances": [{{"claim": "e.g. independent audit, open source, reputable maintainer", "url": "https://..."}}],
   "verdict": "no_concerns_found | some_concerns | serious_concerns"
 }}"""
@@ -103,7 +107,8 @@ def _sanitise(d: dict, cited: list[str]) -> dict:
         "concerns": [{"claim": s(c.get("claim")), "severity": s(c.get("severity"), 10).lower(),
                       "source_title": s(c.get("source_title"), 200), "url": c.get("url") if _url_ok(c.get("url")) else "",
                       "date": s(c.get("date"), 20)}
-                     for c in d.get("concerns") or [] if isinstance(c, dict)][:8],
+                     for c in d.get("concerns") or []
+                     if isinstance(c, dict) and c.get("about_this_extension", True) is not False][:8],
         "reassurances": [{"claim": s(c.get("claim")), "url": c.get("url") if _url_ok(c.get("url")) else ""}
                          for c in d.get("reassurances") or [] if isinstance(c, dict)][:5],
         "verdict": s(d.get("verdict"), 30),
@@ -114,8 +119,8 @@ def _sanitise(d: dict, cited: list[str]) -> dict:
 
 def reputation_findings(rep: dict) -> list[Finding]:
     """Only sourced concerns become a finding, at medium confidence (these are other people's claims)."""
-    sourced = [c for c in rep.get("concerns") or [] if c.get("url")]
-    if not sourced and not (rep.get("ownership_change") or {}).get("reported"):
+    sourced = [c for c in rep.get("concerns") or [] if c.get("url") and c.get("severity") in ("high", "medium")]
+    if rep.get("verdict") == "no_concerns_found" or (not sourced and not (rep.get("ownership_change") or {}).get("reported")):
         return []
     sev = "high" if any(c["severity"] == "high" for c in sourced) or rep.get("verdict") == "serious_concerns" else "medium"
     ev = [Evidence(c["url"], None, f"{c['claim']} ({c.get('source_title') or 'source'}{', ' + c['date'] if c.get('date') else ''})")

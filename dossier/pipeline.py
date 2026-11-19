@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import re
 import shutil
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
@@ -27,9 +28,37 @@ Log = Callable[[str], None]
 
 
 def _domain_of(url: str) -> str:
-    import re
     m = re.match(r"^[a-z]+://([^/:?#]+)", url or "", re.I)
     return registrable_domain(m.group(1)) if m else ""
+
+
+_CODE_HOSTS = ("github.com", "gitlab.com", "codeberg.org", "sr.ht", "bitbucket.org")
+
+
+def score_context(r: AnalysisResult) -> dict:
+    """Facts the scorer uses for trust credits (see scoring.trust_credits)."""
+    st = r.info.store or {}
+    ctx: dict = {}
+    if any(f.rule == "pub.history_stable" for f in r.findings):
+        tl = (r.ownership or {}).get("timeline") or []
+        try:
+            first = dt.date.fromisoformat(tl[0]["date"][:10])
+            ctx["stable_publisher_years"] = (dt.date.today() - first).days / 365.25
+        except (IndexError, KeyError, ValueError):
+            pass
+    ctx["recommended"] = "recommended" in (st.get("badges") or [])
+    users = st.get("users") if isinstance(st.get("users"), int) else 0
+    ctx["users"] = users
+    ctx["big_user_base"] = users >= (100_000 if r.info.browser == "firefox" else 1_000_000)
+    urls = " ".join(str(x) for x in (st.get("publisher_url"), st.get("privacy_url"), r.info.homepage) if x).lower()
+    rep = r.reputation or {}
+    ctx["open_source"] = (any(h in urls for h in _CODE_HOSTS)
+                          or bool(st.get("license") and st.get("license") not in ("all-rights-reserved", "other"))
+                          or any("open source" in c.get("claim", "").lower() or "open-source" in c.get("claim", "").lower()
+                                 for c in rep.get("reassurances") or []))
+    ctx["clean_reputation"] = (bool(rep) and not rep.get("error") and rep.get("verdict") != "serious_concerns"
+                               and not any(c.get("severity") in ("high", "medium") for c in rep.get("concerns") or []))
+    return ctx
 
 
 def _result(fut, default):
@@ -117,6 +146,9 @@ def analyze(raw_target: str, *, browser: str | None = None, llm: LLMConfig | Non
         first_party = {d for d in (_domain_of(info.homepage), _domain_of(info.store.get("publisher_url", "")),
                                    _domain_of(manifest.get("update_url", ""))) if d}
         first_party -= {"github.com", "google.com", "mozilla.org", "microsoft.com", "githubusercontent.com"}
+        # The publisher's own GitHub org (e.g. raw.githubusercontent.com/darkreader/...) is first-party, not a paste site.
+        tokens = {d.split(".")[0] for d in first_party} | {info.name, info.store.get("publisher", ""), info.author}
+        first_party |= {"gh:" + re.sub(r"[^a-z0-9]", "", t.lower()) for t in tokens if t and len(t) > 2}
 
         # Slow network lookups run in the background while the code is scanned.
         pool = ThreadPoolExecutor(max_workers=3)
@@ -171,7 +203,7 @@ def analyze(raw_target: str, *, browser: str | None = None, llm: LLMConfig | Non
                 log("  " + result.llm["error"])
             else:
                 apply_triage(result)
-        scores = compute_scores(result.findings)
+        scores = compute_scores(result.findings, score_context(result))
         result.score = scores["overall"]
         result.verdict = scores["verdict"]
         result.file_stats["scores"] = scores

@@ -143,10 +143,11 @@ def _glance(r: AnalysisResult) -> str:
     else:
         access, acls = "None", "c-good"
     rc_rules = {"csp.remote_script", "code.remote_import", "code.remote_script_tag", "code.exec_code_string",
-                "code.user_scripts", "code.fetch_eval", "update.offstore"}
+                "code.fetch_eval", "update.offstore"}
     if rules & rc_rules:
         remote, rcls = "Yes / likely", "c-high"
-    elif rules & {"code.eval", "code.new_function", "csp.unsafe_eval", "code.script_inject", "mv.v2"}:
+    elif rules & {"code.eval", "code.new_function", "csp.unsafe_eval", "code.script_inject", "mv.v2"} or any(
+            f.rule == "code.user_scripts" and f.severity != "low" for f in r.findings):
         remote, rcls = "Possible", "c-medium"
     else:
         remote, rcls = "No evidence", "c-good"
@@ -205,6 +206,21 @@ def _llm_section(r: AnalysisResult) -> str:
                  f'{" · AI verdict: " + e(v) if v else ""}. The AI reviews the static findings and excerpts; it can soften a '
                  "finding's weight but never adds to the score. Treat its claims as leads to verify.</p></div>")
     return "".join(parts)
+
+
+PROPORTIONATE_COPY = ("Broad access, used proportionately: an established publisher and clean behaviour. The access is "
+                      "real, though; it is one update away from being abused, so keep watching for changes.")
+
+
+def _credits_html(sc: dict) -> str:
+    credits = sc.get("credits") or []
+    if not credits:
+        return ""
+    items = "".join(f"<li>{e(t)} <span class='muted'>(−{c})</span></li>" for t, c in credits)
+    return (f"<details class='small' style='margin-top:6px'><summary class='c-good'>Trust credits applied: "
+            f"−{sc.get('credit_applied', 0)} points</summary><ul class='clean'>{items}</ul>"
+            "<p class='note'>Credits only apply when no red flags were found, are capped at 12, and can't take an "
+            "extension below 35% of its capability score.</p></details>")
 
 
 def _age(ts) -> str:
@@ -444,8 +460,9 @@ def render_html(r: AnalysisResult) -> str:
 {_intel_banner(r)}
 <div class="panel"><div class="verdict">{_ring(r.score)}<div>
 <p class="vword" style="color:{_color_for(r.score)}">{e(verdict_word)} risk</p>
-<p style="margin:0">{e(VERDICT_COPY.get(verdict_word, ''))}</p>
+<p style="margin:0">{e(PROPORTIONATE_COPY if sc.get('proportionate') else VERDICT_COPY.get(verdict_word, ''))}</p>
 <p class="note">{count_line}</p>
+{_credits_html(sc)}
 <div class="bars">
 {_bar('Capability', sc.get('capability', 0), 'What it could do with the access granted')}
 {_bar('Behaviour', sc.get('behaviour', 0), 'What the shipped code appears to do')}

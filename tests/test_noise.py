@@ -99,11 +99,20 @@ def test_real_obfuscation_is_reported(make_ext):
     assert "code.obfuscated" in rules(res)
 
 
-def test_page_network_hooking_detected_in_content_script(make_ext):
-    src = "const o = window.fetch; window.fetch = async (...a) => { const r = await o(...a); return r };"
+def test_page_network_hooking_that_relays_data_is_high(make_ext):
+    src = ("const o = window.fetch; window.fetch = async (...a) => { const r = await o(...a);"
+           " window.postMessage({body: await r.clone().text()}, '*'); return r };")
     res = run(make_ext, {"content_scripts": [{"matches": ["<all_urls>"], "js": ["cs.js"]}]}, {"cs.js": src})
     f = next(f for f in res.findings if f.rule == "data.hook_network")
     assert f.severity == "high" and f.confidence == "high"
+
+
+def test_defensive_hooking_without_a_sink_is_low(make_ext):
+    # Ad-blocker scriptlets wrap fetch to strip ad payloads but have nowhere to send what they see.
+    src = "self.fetch = new Proxy(self.fetch, { apply(t, a, args) { return Reflect.apply(t, a, args) } });"
+    res = run(make_ext, {"content_scripts": [{"matches": ["<all_urls>"], "js": ["cs.js"]}]}, {"cs.js": src})
+    f = next(f for f in res.findings if f.rule == "data.hook_network")
+    assert f.severity == "low" and "no data relayed" in f.title
 
 
 def test_one_finding_per_behaviour(make_ext):

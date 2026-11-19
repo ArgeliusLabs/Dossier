@@ -63,7 +63,7 @@ PERMISSIONS: dict[str, tuple[str, str, str]] = {
     "vpnProvider": ("high", "Implement a VPN client.", "Your traffic goes wherever the vendor sends it."),
     "certificateProvider": ("high", "Provide client certificates.", ""),
     "platformKeys": ("high", "Use platform-managed keys/certificates.", ""),
-    "userScripts": ("high", "Run arbitrary user scripts in pages, including code supplied at runtime.",
+    "userScripts": ("medium", "Run user scripts in pages, including code supplied at runtime (Chrome makes you switch this on).",
                     "The sanctioned way to execute code that is not shipped in the reviewed package."),
     "scripting": ("medium", "Inject scripts and CSS into pages it has host access to.",
                   "Combined with broad host access this means arbitrary code in every page you visit."),
@@ -220,6 +220,15 @@ TRACKERS: dict[str, tuple[str, str]] = {
     "sovrn.com": ("affiliate", "Sovrn affiliate"),
 }
 
+# Where content blockers download their block lists from: expected traffic, not telemetry.
+FILTER_LIST_HOSTS = {
+    "someonewhocares.org", "easylist.to", "easylist-downloads.adblockplus.org", "secure.fanboy.co.nz",
+    "filters.adtidy.org", "pgl.yoyo.org", "ublockorigin.github.io", "ublockorigin.pages.dev",
+    "malware-filter.gitlab.io", "malware-filter.pages.dev", "curbengh.github.io", "mitchellkrogza.github.io",
+    "raw.githubusercontent.com/ublockorigin", "raw.githubusercontent.com/easylist", "big.oisd.nl", "adaway.org",
+    "winhelp2002.mvps.org", "hosts-file.net", "cdn.statically.io/gh/ublockorigin", "ublockorigin.github.io/uassets",
+}
+
 CDN_DOMAINS = {
     "cdnjs.cloudflare.com": "cdnjs", "cdn.jsdelivr.net": "jsDelivr", "unpkg.com": "unpkg",
     "ajax.googleapis.com": "Google Hosted Libraries", "code.jquery.com": "jQuery CDN",
@@ -316,7 +325,7 @@ LIBRARY_FILENAME = re.compile(
     r"(^|/)(jquery|react|react-dom|vue|angular|lodash|underscore|moment|bootstrap|d3|chart|"
     r"purify|dompurify|axios|crypto-js|pdf|pdf\.worker|highlight|codemirror|socket\.io|"
     r"browser-polyfill|webextension-polyfill|polyfill|tesseract|three|popper|marked|handlebars|"
-    r"mustache|sentry|firebase)[\w.-]*\.js$|"
+    r"mustache|sentry|firebase)(?:[.-][\w.-]*)?\.js$|"   # jquery.min.js, chart-4.1.js; not chartbeat.js
     r"(^|[/._~-])(chunk-)?vendors?([._~-][\w.~-]*)?\.js$",   # webpack/vite vendor bundles
     re.I,
 )
@@ -342,6 +351,7 @@ ENDPOINT_CATEGORY_LABELS = {
     "code_hosting": "Code host / serverless / webhook",
     "first_party": "Publisher's own servers",
     "cdn": "Public CDN",
+    "filter_list": "Block-list source",
     "store": "Browser vendor / store",
     "unknown": "Unclassified",
 }
