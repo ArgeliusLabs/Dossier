@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Demo: Totally Normal Coupon Helper",
+  "version": "0.1.0",
+  "description": "INERT TEACHING SAMPLE for Dossier. Contains risky patterns on purpose; it is not functional and must not be installed.",
+  "permissions": ["cookies", "tabs", "storage", "management", "scripting"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{ "matches": ["<all_urls>"], "js": ["content.js"], "run_at": "document_start", "all_frames": true }],
+  "web_accessible_resources": [{ "resources": ["inject.js"], "matches": ["<all_urls>"] }]
+}
