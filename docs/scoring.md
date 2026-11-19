@@ -39,17 +39,18 @@ overall = max(overall, 0.55 x capability)
 | 40-64 | **High** | Significant access or risky behaviour; use only if you need it and accept the exposure |
 | 65-100 | **Severe** | Don't install in any profile you care about without manually reviewing the flagged code |
 
-## Reference points (November 2026, with AI triage)
+## Reference points (November 2026)
 
 | Extension | Verdict | Why |
 |---|---|---|
-| uBlock Origin Lite | Moderate (34) | All-site access and script injection, clean behaviour, no tracking |
-| Dark Reader | Moderate (22) | All-site access, aggressive content scripts, little else |
-| Wappalyzer | Moderate (30) | Cookies on every site; behaviour minimal |
-| PayPal Honey | High (44) | Cookies on every site, hooks page network calls, broad telemetry |
-| Bitwarden | High (58) | Legitimately enormous access: clipboard, screenshots, native app, privacy settings |
-| Grammarly | Severe (69) | Cookies everywhere, native messaging, code-string injection, analytics |
-| Urban VPN | Severe (69) | Hooks page `fetch`/XHR, disables other extensions, proxies all traffic |
+| uBlock Origin Lite | Moderate | All-site access and script injection, clean behaviour, no tracking, same publisher since first archive |
+| Dark Reader | Moderate | All-site access, aggressive content scripts, little else |
+| Wappalyzer | Moderate | Cookies on every site; its own text says it sends anonymous data about websites you visit |
+| Bitwarden | High | Legitimately enormous access: clipboard, screenshots, native app, privacy settings |
+| PayPal Honey | Severe | Cookies on every site, hooks page network calls, native-app token exchange, telemetry |
+| Grammarly | Severe | Cookies everywhere, native messaging, code-string injection, analytics |
+| Instant Data Scraper | Severe | Sold to a new owner in early 2026; consent screens, "we use the URLs you visit", Mixpanel/GA analytics, remote config |
+| Urban VPN | Severe | Hooks page `fetch`/XHR, disables other extensions, proxies all traffic, says it collects browsing data |
 
 A legitimate tool can score High: the score measures **exposure**, not intent. The AI section's "Is the access
 proportionate?" paragraph is where intent and purpose are discussed.

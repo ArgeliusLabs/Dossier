@@ -49,6 +49,15 @@ When the base URL points at localhost, Dossier sends a smaller evidence pack (ab
 typical local context windows. Code-tuned models of 14B parameters or more give noticeably better triage; small models
 tend to confirm everything.
 
+## Web reputation search
+
+When the provider is OpenAI, Dossier also asks the model to **search the web** (OpenAI's built-in web search tool) for
+ownership changes, security or privacy reports, store removals and incidents involving the publisher. The result is a
+sourced summary in the report's *What the web says* section; only claims with a source URL can become a finding, at
+medium confidence. The search runs in the background while the code is scanned and is also handed to the AI analyst.
+It costs roughly 2 cents per extension. Local models can't search the web, so it is skipped for them.
+Disable it with `"web_reputation": false` in `config.json` or `--no-web`.
+
 ## Cost
 
 With `gpt-5.4-mini` a typical extension uses around 10-15k tokens, about a cent per extension. Auditing every extension

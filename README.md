@@ -38,7 +38,8 @@ Every report answers four questions, then adds the OPSEC angles generic scanners
 | **What can it access?** | Every permission and host pattern, translated into what it lets the publisher see or do ("can read your login cookies for every site", not "cookies + `<all_urls>`"). |
 | **What does the code do?** | Remote code loading, `eval` of downloaded data, hooking the page's own `fetch`/`XMLHttpRequest` (the AI-chat harvesting trick), cookie/history/clipboard access, keystroke listeners, proxying, disabling other extensions, stripping security headers, real obfuscation. |
 | **Where does data go?** | Servers used in network calls, classified as analytics, ad pixels, session recording, affiliate networks, remote config, code hosts/tunnels/webhooks, or the publisher's own infrastructure. Hardcoded Telegram-bot, Discord and Slack webhook drop channels are called out. |
-| **Who is behind it?** | Store reputation: users, rating, last update, Featured / Mozilla Recommended badges, trader status, privacy disclosures, and whether the listing still exists. |
+| **Who is behind it?** | Store reputation (users, rating, badges, trader details, privacy disclosures), plus **publisher history from archived copies of the store listing**, which catches extensions that were quietly **sold to a new owner**. With OpenAI, an optional **web search** for news and security write-ups, with sources. |
+| **Does it say it collects your data?** | The extension's own wording ("we use the URLs you visit…", "anonymous browsing data…") and opt-in / consent screens, the tell-tale signs of browsing-data monetisation. |
 | **OPSEC extras** | Whether websites can **detect you have it installed**, off-store **update URLs**, **enumeration of your other extensions**, embedded credentials, text planted to **sway AI or automated reviewers**, and extensions **pulled from the store** but still installed. |
 
 Each report also has:
@@ -83,12 +84,12 @@ You can also run it without installing: `python -m dossier ...` from the reposit
 
 ```bash
 # A store link or bare ID (Chrome by default)
-dossier https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh
+dossier "https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh"
 dossier ddkjiahejlhfcafbddmgiahcphecmpfh
 
 # Edge and Firefox
 dossier odfafepnkmbhccpbejgmiehpchacaeak --browser edge
-dossier https://addons.mozilla.org/en-US/firefox/addon/ublock-origin/
+dossier "https://addons.mozilla.org/en-US/firefox/addon/ublock-origin/"
 dossier darkreader                         # a bare word is treated as a Firefox add-on slug
 
 # Local packages and folders
@@ -104,6 +105,10 @@ dossier <target> --no-llm
 # Try it on the bundled (inert) teaching sample
 dossier examples/demo-risky-extension --no-llm --open
 ```
+
+> **Windows tip:** always put store links in "double quotes". Links often contain `&` (`...?hl=en&pli=1`), and
+> without quotes `cmd`/PowerShell cut the link there and try to run the rest as a command (`'pli' is not
+> recognized...`). Or skip the link and pass the 32-letter ID from the end of it.
 
 Reports go to `./reports/` by default: one HTML file per extension, plus `index.html` when you analyse several.
 The full option list is in [docs/usage.md](docs/usage.md).
@@ -135,8 +140,12 @@ committed by accident. Environment variables (`OPENAI_API_KEY`, `DOSSIER_LLM_MOD
 `--base-url` / `--config` flags still work and override the file, which is handy for scripting.
 
 The model can only **lower** a finding's weight (and never dismiss critical manifest-level capabilities); it never raises
-a score. Everything inside the extension is passed to it as untrusted data. Details, costs and model advice are in
-[docs/llm.md](docs/llm.md).
+a score. Everything inside the extension is passed to it as untrusted data.
+
+With OpenAI, Dossier also runs a **web reputation search** (about 2 cents per extension): it looks for news, researcher
+posts and forum threads about ownership changes, data harvesting or store removals, and lists what it finds with links
+under **What the web says**. Turn it off with `"web_reputation": false` in `config.json` or `--no-web`. Details,
+costs and model advice are in [docs/llm.md](docs/llm.md).
 
 ## Signal over noise
 
@@ -172,7 +181,8 @@ More in [docs/how-it-works.md](docs/how-it-works.md).
 - Browser profiles are only read, never modified.
 - API keys are read from `config.json` or the environment only, never written into reports, and scrubbed from error
   messages.
-- With `--no-llm`, the only network traffic is to the extension stores.
+- With `--no-llm`, the only network traffic is to the extension stores and to `web.archive.org` for the publisher
+  history (skip that too with `--no-archive`).
 
 ## Development
 

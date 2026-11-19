@@ -29,14 +29,6 @@ MAX_EVIDENCE = 5
 
 # ------------------------------------------------------------------ lexing -------------
 
-_TOKEN = re.compile(
-    r"""(?P<lc>//[^\n]*)"""
-    r"""|(?P<bc>/\*.*?\*/)"""
-    r"""|(?P<s>"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)""",
-    re.S,
-)
-
-
 @dataclass
 class JsFile:
     rel: str
@@ -72,19 +64,127 @@ class JsFile:
         return ("…" if a > ls else "") + s + ("…" if b < le else "")
 
 
+_SPECIAL = re.compile(r"[/'\"`{}]")
+_REGEX_PREV = set("(,=:[!&|?{};+-*%<>~^")
+_REGEX_KEYWORDS = {"return", "typeof", "case", "do", "else", "in", "of", "void", "delete", "throw", "new",
+                   "yield", "await", "instanceof"}
+
+
+def _regex_allowed(code: list[str], i: int) -> bool:
+    """Is a '/' at position i the start of a regex literal (vs. a division)? Classic previous-token heuristic."""
+    j = i - 1
+    while j >= 0 and code[j] in " \t\r\n":
+        j -= 1
+    if j < 0:
+        return True
+    c = code[j]
+    if c in _REGEX_PREV:
+        return True
+    if c.isalnum() or c in "_$":
+        k = j
+        while k >= 0 and (code[k].isalnum() or code[k] in "_$"):
+            k -= 1
+        return "".join(code[k + 1:j + 1]) in _REGEX_KEYWORDS
+    return False
+
+
 def lex(rel: str, text: str) -> JsFile:
+    """Split JS into code / comments / string literals / regex literals.
+
+    Comments and regex bodies are blanked out of ``code`` (offsets and newlines preserved) so behaviour
+    rules never match inside them; string literals (including template-literal text) are collected
+    separately. Regex literals are recognised with the previous-token heuristic, which keeps the lexer
+    in sync on minified code where a quote inside a regex would otherwise swallow the rest of the file.
+    """
+    n = len(text)
     code = list(text)
     strings: list[tuple[int, str]] = []
-    for m in _TOKEN.finditer(text):
-        kind = m.lastgroup
-        if kind in ("lc", "bc"):
-            # Guard: '//' inside a regex literal such as /https?:\/\// is escaped, so we are
-            # fairly safe; blank out the comment keeping newlines for line numbering.
-            for i in range(m.start(), m.end()):
-                if code[i] != "\n":
-                    code[i] = " "
-        else:
-            strings.append((m.start(), m.group()[1:-1]))
+    stack: list[int] = []          # brace depth inside each open template-literal ${ ... }
+
+    def blank(a: int, b: int) -> None:
+        for k in range(a, b):
+            if code[k] != "\n":
+                code[k] = " "
+
+    def scan_template(i: int) -> int:
+        """i points just after a backtick or after the closing } of ${...}. Returns next position."""
+        j = i
+        while j < n:
+            c = text[j]
+            if c == "\\":
+                j += 2
+                continue
+            if c == "`":
+                strings.append((i - 1, text[i:j]))
+                return j + 1
+            if c == "$" and j + 1 < n and text[j + 1] == "{":
+                strings.append((i - 1, text[i:j]))
+                stack.append(0)
+                return j + 2
+            j += 1
+        strings.append((i - 1, text[i:n]))
+        return n
+
+    i = 0
+    while i < n:
+        m = _SPECIAL.search(text, i)
+        if not m:
+            break
+        i = m.start()
+        c = text[i]
+        if c == "{":
+            if stack:
+                stack[-1] += 1
+            i += 1
+        elif c == "}":
+            if stack:
+                if stack[-1] == 0:
+                    stack.pop()
+                    i = scan_template(i + 1)
+                    continue
+                stack[-1] -= 1
+            i += 1
+        elif c in "'\"":
+            j = i + 1
+            while j < n and text[j] != c and text[j] != "\n":
+                j += 2 if text[j] == "\\" else 1
+            strings.append((i, text[i + 1:min(j, n)]))
+            i = j + 1
+        elif c == "`":
+            i = scan_template(i + 1)
+        else:  # '/'
+            nxt = text[i + 1] if i + 1 < n else ""
+            if nxt == "/":
+                j = text.find("\n", i)
+                j = n if j < 0 else j
+                blank(i, j)
+                i = j
+            elif nxt == "*":
+                j = text.find("*/", i + 2)
+                j = n if j < 0 else j + 2
+                blank(i, j)
+                i = j
+            elif _regex_allowed(code, i):
+                j, in_class = i + 1, False
+                while j < n and text[j] != "\n":
+                    ch = text[j]
+                    if ch == "\\":
+                        j += 2
+                        continue
+                    if in_class:
+                        in_class = ch != "]"
+                    elif ch == "[":
+                        in_class = True
+                    elif ch == "/":
+                        break
+                    j += 1
+                if j < n and text[j] == "/":
+                    blank(i + 1, j)          # regex body is neither code nor a string
+                    i = j + 1
+                else:
+                    i += 1                   # not a regex after all (division)
+            else:
+                i += 1
     lines = [m.start() for m in re.finditer("\n", text)]
     return JsFile(rel, text, "".join(code), strings, lines)
 
@@ -113,6 +213,8 @@ def _dynamic_code_ok(js: JsFile, m: re.Match) -> bool:
     window = js.code[m.start():m.start() + 120]
     if any(p.search(window) for p in BENIGN_DYNAMIC_CODE):
         return False
+    if "__p" in js.text[max(0, m.start() - 400):m.start()]:
+        return False   # lodash/underscore _.template compiler inlined into a bundle
     # Ignore property names like obj.eval( or "evaluate("
     before = js.code[max(0, m.start() - 1):m.start()]
     if before in (".", "$", "_", "/", "|") or before.isalnum():
@@ -126,6 +228,8 @@ def _remote_script_inject(js: JsFile, m: re.Match) -> bool:
     window = js.code[m.start():m.start() + 500]
     if re.search(r"getURL\s*\(|runtime\.getURL|extension\.getURL|chrome-extension://|moz-extension://", window):
         return False
+    if "webpack" in js.text[max(0, m.start() - 300):m.start() + 500]:
+        return False   # webpack's own chunk loader (loads the extension's own files)
     return bool(re.search(r"\.src\s*=\s*(?!['\"`](?:data:|blob:|chrome|moz))|setAttribute\(\s*['\"]src['\"]", window))
 
 
@@ -175,7 +279,7 @@ RULES: list[Rule] = [
          content_script_only=True),
     Rule("data.password_fields", "data_access", "medium", "Interacts with password fields",
          "Content script targets password inputs on pages. Expected for password managers; unexpected anywhere else.",
-         re.compile(r"""type\s*=\s*\\?['"]?password|input\[type=\\?['"]?password|\.type\s*===?\s*['"]password['"]"""),
+         re.compile(r"""(?<![\w$])type\s*=\s*\\?['"]?password|input\[type=\\?['"]?password|\.type\s*===?\s*['"]password['"]"""),
          content_script_only=True),
     Rule("data.clipboard_read", "data_access", "medium", "Reads the clipboard",
          "Reads clipboard contents, which often hold passwords, 2FA codes or case notes.",
@@ -241,7 +345,21 @@ OBFUSCATION_MARKERS = [
     ("Dean Edwards packer", re.compile(r"eval\(function\(p,a,c,k,e,[dr]\)"), 1),
     ("JSFuck", re.compile(r"\[\]\[\(!\[\]\+\[\]\)"), 1),
     ("hex-escaped strings", re.compile(r"(?:\\x[0-9a-fA-F]{2}){8,}"), 40),
+    # Numbers hidden in strings, e.g. parseInt("21600000") for a 6-hour timer: hides intervals and sizes from review.
+    ("numeric constants hidden in strings", re.compile(r"parseInt\(\s*[\"']\d{3,}[\"']\s*\)"), 6),
 ]
+
+# User-facing wording in which an extension says it collects browsing data. Matched in locale files, HTML text
+# and short natural-language string literals. The extension's own words are hard to dismiss as a false positive.
+DISCLOSURE = re.compile(
+    r"(?:\b(?:URLs?|web ?sites?|web ?pages?|pages?|sites?|domains?)\s+(?:that\s+)?you(?:'ve)?\s+(?:visit|browse|view|open)\w*"
+    r"|\bbrowsing\s+(?:history|data|activity|behaviou?r|information|habits)"
+    r"|\b(?:anonymous|anonymi[sz]ed|aggregated|de-identified|non-personal)\s+(?:usage\s+|browsing\s+|web\s+)?(?:data|information|statistics)"
+    r"|\b(?:sell|share|transfer|disclose)\w*\s+[^.]{0,50}?\b(?:data|information)\s+with\s+(?:third[- ]part|partners|affiliates)"
+    r"|\bdata\s+(?:partners?|brokers?|monetization)|\bclickstream|\bsearch\s+(?:queries|history)\s+you\b"
+    r"|\bbased on what other users\b)",
+    re.I)
+CONSENT_UI = re.compile(r"(?:^|/)(?:opt[-_]?in\w*|opt[-_]?out\w*|consent\w*|privacy[-_]?notice\w*|data[-_]?sharing\w*)(?:/|\.(?:js|html?)$)", re.I)
 
 SECURITY_HEADERS = re.compile(
     r"""['"](?:content-security-policy(?:-report-only)?|x-frame-options|strict-transport-security|"""
@@ -357,6 +475,8 @@ def scan(root: Path, manifest: dict, first_party_domains: set[str]) -> CodeScanR
     cs_files = _content_script_files(manifest)
     bg_files = _background_files(manifest)
     extra_findings: list[Finding] = []
+    disclosures: dict[str, str] = {}      # sentence -> file
+    consent_files: set[str] = set()
     first_party_js: list[JsFile] = []
 
     files = sorted(p for p in root.rglob("*") if p.is_file() and not p.is_symlink())
@@ -376,12 +496,16 @@ def scan(root: Path, manifest: dict, first_party_domains: set[str]) -> CodeScanR
                                           "legitimate (codecs, crypto, parsers), but it hides logic from review.",
                                           [Evidence(rel, None, f"{size:,} bytes")]))
             continue
+        if CONSENT_UI.search(rel):
+            consent_files.add(rel)
         if ext not in (".js", ".mjs", ".cjs", ".html", ".htm", ".json"):
             continue
         if size > MAX_FILE_BYTES:
             noise["files too large to scan"] += 1
             continue
         text = p.read_bytes().decode("utf-8", "replace")
+        if ext == ".json" and rel.startswith("_locales/") or ext in (".html", ".htm"):
+            _collect_disclosures(rel, re.sub(r"<[^>]+>", " ", text) if ext != ".json" else text, disclosures)
 
         if ext in (".html", ".htm"):
             _scan_html(rel, text, endpoints, extra_findings, first_party_domains, noise)
@@ -414,8 +538,9 @@ def scan(root: Path, manifest: dict, first_party_domains: set[str]) -> CodeScanR
 
         # ---- behaviour rules ----
         for rule in RULES:
-            if rule.content_script_only and "content_script" not in js.role and not js.is_bundle:
-                continue
+            if rule.content_script_only and "content_script" not in js.role and not (
+                    js.is_bundle and re.search(r"content|inject|page[-_]?script", rel, re.I)):
+                continue   # page-only behaviours: declared content scripts, or bundles that look injected
             for m in rule.pattern.finditer(js.code):
                 if js.in_string(m.start()):
                     noise["code-like text inside string literals (filter lists, messages)"] += 1
@@ -447,9 +572,14 @@ def scan(root: Path, manifest: dict, first_party_domains: set[str]) -> CodeScanR
 
         # ---- endpoints from string literals ----
         _collect_endpoints(js, endpoints, first_party_domains, noise)
+        if not lib:
+            for off, s in js.strings:
+                if 30 <= len(s) <= 500 and " " in s:   # natural-language strings only
+                    _collect_disclosures(rel, s, disclosures)
 
     findings = _build_rule_findings(findings_hits)
     findings += _merge_extra(extra_findings)
+    findings += _data_collection_findings(disclosures, consent_files)
     findings += _fetch_eval_combo(first_party_js)
     llm_snippets = _llm_snippets(findings_hits, endpoints, first_party_js)
     stats["libraries"] = len(libraries)
@@ -604,6 +734,41 @@ def _check_secrets(js: JsFile, out: list[Finding]) -> None:
             "The code contains wording that tries to talk to a reviewer or scanner (e.g. 'ignore previous instructions', "
             "'this extension is safe'). Honest code has no reason to address its reviewer.",
             [Evidence(js.rel, js.line_of(m.start()), js.snippet(m.start(), m.end(), 40, 60))]))
+
+
+def _collect_disclosures(rel: str, text: str, out: dict[str, str]) -> None:
+    for m in DISCLOSURE.finditer(text):
+        a = max(text.rfind(".", 0, m.start()), text.rfind('"', 0, m.start()), text.rfind("\n", 0, m.start())) + 1
+        ends = [x for x in (text.find(".", m.end()), text.find('"', m.end()), text.find("\n", m.end())) if x >= 0]
+        b = min(ends) + 1 if ends else len(text)
+        sentence = re.sub(r"\s+", " ", text[a:b]).strip(' "')[:240]
+        if len(out) < 20 and len(sentence) > 15:
+            out.setdefault(sentence, rel)
+
+
+def _data_collection_findings(disclosures: dict[str, str], consent_files: set[str]) -> list[Finding]:
+    out = []
+    if disclosures:
+        ev = [Evidence(f, None, s) for s, f in list(disclosures.items())[:5]]
+        out.append(Finding(
+            "data.disclosed_collection", "data_collection", "high",
+            "Its own text says it collects your browsing data",
+            "User-facing text shipped inside the extension describes using the sites you visit, your browsing data, or "
+            "sharing aggregated data. This is the extension describing itself, so it is hard to dismiss as a false "
+            "positive. Features like 'presets', 'recommendations' or 'what other users do' usually work by uploading "
+            "the URLs every user visits.", ev, total_hits=len(disclosures),
+            opsec="Your target list becomes part of someone else's dataset. Don't use it in an investigation profile."))
+    if consent_files:
+        dirs = sorted({f.rsplit("/", 1)[0] if "/" in f else f for f in consent_files})
+        out.append(Finding(
+            "data.consent_flow", "data_collection", "medium",
+            "Ships an opt-in / consent screen for data sharing",
+            "The package contains opt-in, consent or privacy-notice screens. Free extensions add these when they start "
+            "collecting or selling browsing data, because store policy requires consent before collecting it. A "
+            "feature upsell such as 'turn on new tools' is the usual wrapper.",
+            [Evidence(d, None, ", ".join(sorted(f.rsplit('/', 1)[-1] for f in consent_files if f.startswith(d))[:6]))
+             for d in dirs[:5]], total_hits=len(consent_files)))
+    return out
 
 
 BULK_HOSTS = 30

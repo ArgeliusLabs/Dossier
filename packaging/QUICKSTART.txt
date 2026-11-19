@@ -12,8 +12,15 @@ DOSSIER - QUICK START
    macOS/Linux: open Terminal and cd into this folder
 
 3. Analyse an extension (paste a store link, an ID, or a .crx/.xpi file)
-   Windows:      .\dossier.exe https://chromewebstore.google.com/detail/<name>/<id> --open
-   macOS/Linux:  ./dossier https://addons.mozilla.org/firefox/addon/<name>/ --open
+   Windows:      .\dossier.exe "https://chromewebstore.google.com/detail/<name>/<id>" --open
+   macOS/Linux:  ./dossier "https://addons.mozilla.org/firefox/addon/<name>/" --open
+
+   IMPORTANT: put the link in "double quotes". Store links often contain "&" (like ?hl=en&pli=1),
+   and without quotes Windows cuts the link there and shows an error such as
+   'pli' is not recognized as an internal or external command. Or skip the link and use the ID,
+   the 32 letters at the end of a Chrome Web Store link:
+   Windows:      .\dossier.exe "https://chromewebstore.google.com/detail/name/abcdefghijklmnopabcdefghijklmnop?hl=en&pli=1"
+                 .\dossier.exe abcdefghijklmnopabcdefghijklmnop
 
    Audit everything installed in your own browsers:
    Windows:      .\dossier.exe --installed --open

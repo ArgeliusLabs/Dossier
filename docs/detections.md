@@ -86,11 +86,18 @@ come from the code. Rule IDs appear in `--json` output and in history snapshots.
 | `net.beacon` | low | Uses `sendBeacon` |
 | `net.servers` | info | List of servers contacted from first-party code |
 
+## Declared data collection
+
+| Rule | Severity | Finding |
+|---|---|---|
+| `data.disclosed_collection` | high | The extension's own text (locales, pages, UI strings) says it uses the sites you visit, browsing data, or shares aggregated data |
+| `data.consent_flow` | medium | Ships opt-in / consent / privacy-notice screens, the usual wrapper for browsing-data monetisation |
+
 ## Concealment and supply chain
 
 | Rule | Severity | Finding |
 |---|---|---|
-| `code.obfuscated` | high | Real obfuscator markers (not minification) |
+| `code.obfuscated` | high | Real obfuscator markers (not minification), including numeric constants hidden in strings such as `parseInt("21600000")` |
 | `update.offstore` | high | Updates come from outside the official store |
 | `code.encoded_blob` | medium | Large base64 payload decoded at runtime |
 | `code.ai_bait` | medium | Text addressed to AI or automated reviewers |
@@ -110,6 +117,10 @@ come from the code. Rule IDs appear in `--json` output and in history snapshots.
 
 | Rule | Severity | Finding |
 |---|---|---|
+| `pub.owner_changed` | high/medium | Archived store listings show a different publisher organisation (high if in the last two years) |
+| `web.reported_concerns` | high/medium | Sourced web reports of an ownership change, data harvesting or other problems (AI web search, medium confidence) |
+| `pub.publisher_renamed` | low | Publisher name changed but the contact domain stayed the same |
+| `pub.history_stable` | info | Same publisher across all archived listings |
 | `pub.disabled` | critical | Disabled on the store |
 | `pub.removed` | high | No longer available on the Chrome/Edge store |
 | `pub.not_listed` | medium | Not listed on addons.mozilla.org |

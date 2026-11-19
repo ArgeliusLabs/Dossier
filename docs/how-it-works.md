@@ -70,13 +70,23 @@ that contains one. They are then:
 - classified: session recording, advertising, analytics (including hostnames like `stats.` or `telemetry.`),
   affiliate, telemetry, remote config, code hosting/tunnels/webhooks, CDN, store, the publisher's own domains, or unknown.
 
-## 6. AI triage (optional)
+## 6. Who is behind it
+
+- **Store listing**: publisher, trader address, phone and D-U-N-S number (Chrome trader listings), support e-mail,
+  privacy policy, users, rating, badges, removal status.
+- **Publisher history**: archived copies of the listing on web.archive.org are sampled and bisected to find when the
+  publisher organisation changed. See [usage.md](usage.md#ownership-changes).
+- **Web reputation** (OpenAI only): a web search for news, researcher posts and forum threads about ownership changes
+  or data harvesting. Only claims with a source URL are kept; they appear under *What the web says* and, if any, as one
+  medium-confidence finding.
+
+## 7. AI triage (optional)
 
 See [llm.md](llm.md). The model gets the deterministic findings plus budgeted code excerpts and returns a summary,
 proportionality assessment, data flows, extra concerns (shown separately, unverified) and a per-finding triage that can
 only soften scores.
 
-## 7. Scoring and report
+## 8. Scoring and report
 
 See [scoring.md](scoring.md). The HTML report is a single file with no external resources. A small snapshot is saved
 for change tracking ([usage.md](usage.md#change-tracking)).

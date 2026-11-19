@@ -98,6 +98,8 @@ class AnalysisResult:
     verdict: str = ""
     llm: dict[str, Any] = field(default_factory=dict)
     changes: dict[str, Any] = field(default_factory=dict)   # diff against a previous audit, if any
+    ownership: dict[str, Any] = field(default_factory=dict)  # publisher timeline from archived store listings
+    reputation: dict[str, Any] = field(default_factory=dict) # web reputation lookup (sourced claims)
     generated_at: str = ""
     tool_version: str = ""
 

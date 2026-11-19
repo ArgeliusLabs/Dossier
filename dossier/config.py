@@ -43,13 +43,21 @@ TEMPLATE = """{
   // Only for other hosted OpenAI-compatible services (e.g. OpenRouter). Local servers don't need it.
   "api_key": "",
 
+  // ---- Extra checks (both on by default) ----------------------------------------------
+  // Look up who published the extension in the past, using archived store pages (web.archive.org).
+  // Catches extensions that were sold to a new owner.
+  "archive_lookup": true,
+  // With OpenAI only: search the web for news and security write-ups about the extension (~2 cents each).
+  "web_reputation": true,
+
   // ---- Advanced ----------------------------------------------------------------------
   "timeout_seconds": 180,
   "json_mode": true
 }
 """
 
-KNOWN_KEYS = {"openai_api_key", "model", "base_url", "api_key", "timeout_seconds", "json_mode"}
+KNOWN_KEYS = {"openai_api_key", "model", "base_url", "api_key", "timeout_seconds", "json_mode",
+              "archive_lookup", "web_reputation"}
 
 
 class ConfigError(Exception):

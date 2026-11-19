@@ -39,3 +39,12 @@ def test_firefox_ublock_origin_from_amo():
 def test_edge_store_download():
     res = analyze("odfafepnkmbhccpbejgmiehpchacaeak", browser="edge", log=lambda *_: None)
     assert res.info.name and res.info.store.get("store") == "Microsoft Edge Add-ons"
+
+
+def test_instant_data_scraper_sale_is_caught():
+    """Sold by Web Robots to Flavr Technology, LP in early 2026; the store listing gives no hint of it."""
+    res = analyze("ofaokhiedipichpaobibbnahnkdoiiah", log=lambda *_: None)
+    assert {"pub.owner_changed", "data.disclosed_collection", "data.consent_flow", "net.analytics"} <= _rules(res)
+    timeline = " ".join(e["publisher"] for e in res.ownership["timeline"])
+    assert "webrobots" in timeline.lower()
+    assert res.verdict in ("High", "Severe")

@@ -6,6 +6,7 @@ stops the analysis, it just leaves the "who's behind it" section thinner.
 from __future__ import annotations
 
 import datetime as dt
+import gzip
 import html
 import json
 import re
@@ -119,6 +120,11 @@ def _get(url: str, accept: str = "*/*", limit: int = MAX_DOWNLOAD) -> bytes:
         raise FetchError(f"Network error fetching {url.split('?')[0]}: {e.reason}") from e
     if len(data) > limit:
         raise FetchError("Download exceeds size limit.")
+    if data[:2] == b"\x1f\x8b":   # gzip body served as-is (e.g. raw Wayback Machine captures)
+        try:
+            data = gzip.decompress(data)
+        except (OSError, EOFError):
+            pass
     return data
 
 
@@ -220,6 +226,7 @@ def _amo_normalise(a: dict) -> dict:
         "is_experimental": a.get("is_experimental"),
         "requires_payment": a.get("requires_payment"),
         "guid": a.get("guid"),
+        "slug": a.get("slug"),
         "file_hash": f.get("hash"),
         "data_collection_permissions": f.get("data_collection_permissions"),
         "support_email": _first_locale(a.get("support_email")),
@@ -264,6 +271,9 @@ def _chrome_meta(ext_id: str) -> dict:
     m = re.search(r'<meta property="og:description" content="([^"]*)"', raw)
     if m:
         out["summary"] = html.unescape(m.group(1))
+    m = re.search(r'<meta property="og:url" content="https://chromewebstore\.google\.com/detail/([^/"]+)/' + ext_id, raw)
+    if m:
+        out["slug"] = m.group(1)   # needed to find archived copies of the listing
     text = re.sub(r"<script.*?</script>|<style.*?</style>", "", raw, flags=re.S)
     lines = [ln.strip() for ln in html.unescape(re.sub(r"<[^>]+>", "\n", text)).split("\n") if ln.strip()]
     # Only trust the main listing (stop before "related" carousels).
@@ -283,11 +293,26 @@ def _chrome_meta(ext_id: str) -> dict:
             out["rating_count"] = int(float(m.group(1)) * mult)
         elif ln in ("Trader", "Non-trader"):
             out["trader_status"] = ln
+        elif ln == "Developer" and i + 1 < len(main) and "publisher" not in out:
+            # Developer block: name, then postal address lines (traders), then Website/Email/Phone labels.
+            out["publisher"] = main[i + 1]
+            addr = []
+            for nxt in main[i + 2:i + 8]:
+                if nxt in _CHROME_LABELS or nxt in ("Trader", "Non-trader"):
+                    break
+                addr.append(nxt)
+            if addr:
+                out["publisher_address"] = ", ".join(addr)
+        elif ln == "D-U-N-S" and "duns" not in out:
+            num = next((x for x in main[i + 1:i + 5] if re.fullmatch(r"\d{9}", x)), None)
+            if num:
+                out["duns"] = num
         elif ln in _CHROME_LABELS and i + 1 < len(main):
             key = {"Offered by": "publisher", "Updated": "last_updated", "Version": "version",
-                   "Size": "size", "Website": "publisher_url", "Email": "support_email"}.get(ln)
-            if key and key not in out:
-                out[key] = main[i + 1]
+                   "Size": "size", "Email": "support_email", "Phone": "phone"}.get(ln)
+            val = main[i + 1]
+            if key and key not in out and val not in _CHROME_LABELS:
+                out[key] = val
     m = re.search(r'href="(https?://[^"]+)"[^>]*>\s*(?:<[^>]+>\s*)*Website', raw)
     if m and "publisher_url" not in out:
         out["publisher_url"] = html.unescape(m.group(1))

@@ -22,7 +22,13 @@ EPILOG = """examples:
   dossier C:\\Downloads\\thing.crx  ./unpacked-folder  --no-llm
   dossier --installed                      # audit everything in your local browser profiles
   dossier --installed firefox,brave --no-llm
-  set DOSSIER_LLM_BASE_URL=http://localhost:11434/v1 & dossier <id> --model qwen2.5-coder:14b
+  dossier --init-config                    # create config.json for your API key / local model
+
+tip (Windows): store links often contain "&" (e.g. ...?hl=en&pli=1). Wrap the link in double quotes,
+  or just pass the 32-letter ID. Without quotes, cmd/PowerShell cut the link at the "&" and try to run
+  the rest as a command ("'pli' is not recognized ...").
+    dossier "https://chromewebstore.google.com/detail/name/ofaokhiedipichpaobibbnahnkdoiiah?hl=en&pli=1"
+    dossier ofaokhiedipichpaobibbnahnkdoiiah
 """
 
 
@@ -51,6 +57,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fail-on", choices=["moderate", "high", "severe"],
                     help="Exit with code 2 if any extension reaches this verdict (for scripts / CI)")
     ap.add_argument("--no-llm", action="store_true", help="Static analysis only; nothing leaves your machine except store requests")
+    ap.add_argument("--no-archive", action="store_true",
+                    help="Skip the publisher-history lookup in archived store listings (web.archive.org)")
+    ap.add_argument("--no-web", action="store_true", help="Skip the AI web search for news and security reports about the extension")
     ap.add_argument("--config", type=Path, metavar="FILE", help="Use this config.json (API key, model, local model URL)")
     ap.add_argument("--init-config", nargs="?", const="", metavar="FILE",
                     help="Create a ready-to-fill config.json (next to Dossier by default) and exit")
@@ -113,6 +122,8 @@ def main(argv: list[str] | None = None) -> int:
     elif cfg.enabled:
         log(f"AI: {cfg.provider_label}, model {cfg.model}" + (f" (settings from {cfg_path})" if cfg_path else ""))
 
+    archive = not a.no_archive and file_cfg.get("archive_lookup", True) is not False
+    web = not a.no_web and file_cfg.get("web_reputation", True) is not False
     out_dir = a.out.parent if (a.out.suffix.lower() == ".html" and len(jobs) == 1) else a.out
     def work(i: int):
         tgt, kw, suffix = jobs[i]
@@ -120,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
         keep = (a.keep / _slug(suffix + "_" + Path(tgt).name if suffix else tgt)) if a.keep and len(jobs) > 1 else a.keep
         try:
             return analyze(tgt, llm=cfg if cfg.enabled else None, keep_dir=keep,
-                           log=lambda m: log(tag + m.strip()), **kw)
+                           log=lambda m: log(tag + m.strip()), archive=archive, web=web, **kw)
         except (FetchError, UnpackError, OSError, ValueError) as e:
             return e
 

@@ -5,6 +5,7 @@ import datetime as dt
 import hashlib
 import shutil
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable
 
@@ -16,6 +17,8 @@ from .knowledge import registrable_domain
 from .llm import apply_triage, run_llm
 from .manifest import analyze_manifest, build_permissions, icon_data_uri, load_manifest, resolve_i18n
 from .models import AnalysisResult, ExtensionInfo
+from .ownership import ownership_findings, publisher_history
+from .reputation import reputation_findings, web_reputation
 from .scoring import assign_ids, compute_scores, endpoint_findings, publisher_findings
 from .unpack import extract_package, find_manifest_root
 
@@ -28,6 +31,15 @@ def _domain_of(url: str) -> str:
     return registrable_domain(m.group(1)) if m else ""
 
 
+def _result(fut, default):
+    if fut is None:
+        return default
+    try:
+        return fut.result(timeout=240) or default
+    except Exception as e:  # noqa: BLE001 - lookups are best-effort
+        return {"error": f"lookup failed: {e}"} if isinstance(default, dict) else default
+
+
 def tree_hash(root: Path) -> str:
     """Content hash of an unpacked extension (store-added _metadata excluded) so folders can be change-tracked."""
     h = hashlib.sha256()
@@ -38,11 +50,14 @@ def tree_hash(root: Path) -> str:
 
 def analyze(raw_target: str, *, browser: str | None = None, llm: LLMConfig | None = None,
             keep_dir: Path | None = None, log: Log = print,
-            store_lookup: tuple[str, str] | None = None, context: dict | None = None) -> AnalysisResult:
+            store_lookup: tuple[str, str] | None = None, context: dict | None = None,
+            archive: bool = True, web: bool = True) -> AnalysisResult:
     """Analyse one extension.
 
     store_lookup: (store, id) to fetch store reputation for a *local* package, e.g. an installed extension.
     context:      free-form facts shown in the report header (browser profile, enabled state, ...).
+    archive:      look up publisher history in archived store listings (web.archive.org).
+    web:          ask the AI provider to search the web for reputation reports (OpenAI only).
     """
     t: Target = resolve_target(raw_target, browser)
     info = ExtensionInfo(source=raw_target, browser=t.browser, ext_id=t.ext_id, store_url=t.store_url,
@@ -100,6 +115,16 @@ def analyze(raw_target: str, *, browser: str | None = None, llm: LLMConfig | Non
                                    _domain_of(manifest.get("update_url", ""))) if d}
         first_party -= {"github.com", "google.com", "mozilla.org", "microsoft.com", "githubusercontent.com"}
 
+        # Slow network lookups run in the background while the code is scanned.
+        pool = ThreadPoolExecutor(max_workers=2)
+        fut_hist = fut_rep = None
+        if lookup and archive and info.browser in ("chrome", "firefox") and not info.store.get("removed"):
+            slug = info.store.get("slug") or ("" if info.browser == "chrome" else lookup.ext_id)
+            fut_hist = pool.submit(publisher_history, info.browser, info.ext_id, slug, log)
+        if lookup and web and llm and llm.enabled and not llm.base_url:
+            log("Searching the web for reputation reports ...")
+            fut_rep = pool.submit(web_reputation, llm, info)
+
         log("Analysing manifest and code ...")
         perms = build_permissions(manifest)
         findings = analyze_manifest(manifest, perms)
@@ -109,6 +134,17 @@ def analyze(raw_target: str, *, browser: str | None = None, llm: LLMConfig | Non
         pub, good = publisher_findings(info.store, sideloaded=lookup is None, browser=info.browser,
                                        local_version=info.version if t.kind != "store" else "")
         findings += pub
+        hist = _result(fut_hist, {})
+        rep = _result(fut_rep, {})
+        pool.shutdown(wait=False)
+        if hist:
+            st = info.store
+            findings += ownership_findings(hist, {"publisher": st.get("publisher", ""), "email": st.get("support_email", ""),
+                                                  "website": st.get("publisher_url", "")})
+        if rep and not rep.get("error"):
+            findings += reputation_findings(rep)
+        elif rep.get("error"):
+            log("  " + rep["error"])
         info.file_count = cs.stats.get("files", 0)
         info.js_bytes = cs.stats.get("js_bytes", 0)
         assign_ids(findings)
@@ -117,6 +153,7 @@ def analyze(raw_target: str, *, browser: str | None = None, llm: LLMConfig | Non
             info=info, manifest=manifest, permissions=perms, findings=findings, endpoints=cs.endpoints,
             libraries=cs.libraries, noise=dict(cs.noise), file_stats={**cs.stats, "trust_signals": good},
             generated_at=dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z"), tool_version=__version__,
+            ownership=hist, reputation=rep,
         )
 
         if llm and llm.enabled:

@@ -31,6 +31,8 @@ You can pass several targets at once; they are analysed in parallel and summaris
 | `--no-history` | Don't save or compare history snapshots |
 | `--fail-on {moderate,high,severe}` | Exit with code 2 if any extension reaches that verdict |
 | `--no-llm` | Static analysis only |
+| `--no-archive` | Skip the publisher-history lookup in archived store listings (web.archive.org) |
+| `--no-web` | Skip the AI web search for news and security reports (OpenAI only) |
 | `--init-config [FILE]` | Create a ready-to-fill `config.json` (next to Dossier by default) and exit |
 | `--config FILE` | Use this settings file instead of the default `config.json` |
 | `--model NAME` | AI model for this run (overrides `config.json`) |
@@ -60,6 +62,20 @@ Windows, macOS and Linux. For each extension it:
 
 Profiles are only read. A running browser can lock some profile files; the scan still works, but the enabled state may
 show as unknown.
+
+## Ownership changes
+
+Popular extensions are regularly bought and then updated to collect or sell browsing data. Stores don't publish
+ownership history, so Dossier reconstructs it: it lists the Internet Archive's snapshots of the store page, samples
+them across the years, and narrows down every point where the publisher name or contact domain changed (about 10-15
+small requests, typically 20-60 seconds, run in the background while the code is scanned).
+
+- A change of **organisation** (different contact/website domain) raises **"The extension has changed owners"**
+  (high if within the last two years) and shows the full timeline under *Who is behind it*.
+- A rename with the same domain (e.g. `webrobots.io` → `UAB Webrobots`) is reported as low: usually a rename, not a sale.
+- Trust signals such as user counts and badges are marked as earned before the change of owner.
+
+Supported for Chrome Web Store and Firefox Add-ons listings. Disable with `--no-archive` or `"archive_lookup": false`.
 
 ## Change tracking
 
