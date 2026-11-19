@@ -70,7 +70,13 @@ that contains one. They are then:
 - classified: session recording, advertising, analytics (including hostnames like `stats.` or `telemetry.`),
   affiliate, telemetry, remote config, code hosting/tunnels/webhooks, CDN, store, the publisher's own domains, or unknown.
 
-## 6. Who is behind it
+## 6. Known-malicious lists
+
+The extension ID and package hash are matched against public threat-intel lists (see
+[usage.md](usage.md#known-malicious-lists)). This runs in the background during the scan from a local cache that is
+refreshed daily.
+
+## 7. Who is behind it
 
 - **Store listing**: publisher, trader address, phone and D-U-N-S number (Chrome trader listings), support e-mail,
   privacy policy, users, rating, badges, removal status.
@@ -80,13 +86,13 @@ that contains one. They are then:
   or data harvesting. Only claims with a source URL are kept; they appear under *What the web says* and, if any, as one
   medium-confidence finding.
 
-## 7. AI triage (optional)
+## 8. AI triage (optional)
 
 See [llm.md](llm.md). The model gets the deterministic findings plus budgeted code excerpts and returns a summary,
 proportionality assessment, data flows, extra concerns (shown separately, unverified) and a per-finding triage that can
 only soften scores.
 
-## 8. Scoring and report
+## 9. Scoring and report
 
 See [scoring.md](scoring.md). The HTML report is a single file with no external resources. A small snapshot is saved
 for change tracking ([usage.md](usage.md#change-tracking)).

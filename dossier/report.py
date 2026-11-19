@@ -18,7 +18,7 @@ CAT_LABEL = {
     "obfuscation": "Obfuscation", "data_access": "Data access", "control": "Browser control",
     "network": "Network & tracking", "fingerprinting": "Detectability / fingerprinting", "exposure": "Exposure to websites",
     "supply_chain": "Updates / supply chain", "behavior": "Browser behaviour", "trust": "Publisher & store",
-    "data_collection": "Declared data collection",
+    "data_collection": "Declared data collection", "threat_intel": "Known-malicious lists",
 }
 VERDICT_COPY = {
     "Low": "Little in this package should worry an OPSEC-conscious user. Normal hygiene still applies.",
@@ -162,6 +162,8 @@ def _glance(r: AnalysisResult) -> str:
         ("Detectable by sites", det, "c-medium" if det == "Yes" else "c-good"),
         ("Manifest", f"V{r.info.manifest_version}", "c-medium" if r.info.manifest_version == 2 else ""),
     ]
+    if "intel.known_bad" in rules:
+        tiles.insert(0, ("Known-bad lists", "LISTED", "c-critical"))
     if "pub.owner_changed" in rules:
         tiles.insert(0, ("Owner", "Changed hands", "c-high"))
     elif "pub.history_stable" in rules:
@@ -203,6 +205,45 @@ def _llm_section(r: AnalysisResult) -> str:
                  f'{" · AI verdict: " + e(v) if v else ""}. The AI reviews the static findings and excerpts; it can soften a '
                  "finding's weight but never adds to the score. Treat its claims as leads to verify.</p></div>")
     return "".join(parts)
+
+
+def _age(ts) -> str:
+    import time
+    if not ts:
+        return "?"
+    h = (time.time() - ts) / 3600
+    return f"{h:.0f} h ago" if h < 48 else f"{h / 24:.0f} days ago"
+
+
+def _intel_banner(r: AnalysisResult) -> str:
+    hits = (r.intel or {}).get("hits") or []
+    if not hits:
+        return ""
+    rows = "".join(
+        f"<li><b>{e(h['label'])}</b>: {e(h.get('threat') or h.get('reason') or ('confirmed malicious' if h.get('confirmed') else 'listed'))}"
+        + (f" <span class='muted'>(added {e(h['added'])})</span>" if h.get("added") else "")
+        + (f"<div class='small'>{e(h['notes'][:300])}</div>" if h.get("notes") else "")
+        + "".join(f" <a href='{e(u)}' rel='noreferrer noopener'>source</a>" for u in (h.get("links") or [])[:2])
+        + "</li>" for h in hits[:6])
+    return ("<div class='panel' style='border:2px solid var(--critical);margin-bottom:16px'>"
+            "<p class='vword c-critical' style='margin-top:0'>On a public list of known-malicious extensions</p>"
+            f"<ul class='clean'>{rows}</ul>"
+            "<p class='note'>Remove it from every browser profile. Lists are compiled from store takedowns, vendor research "
+            "and incident reports; see the linked sources for what it did.</p></div>")
+
+
+def _intel_note(r: AnalysisResult) -> str:
+    srcs = [s for s in (r.intel or {}).get("sources") or []]
+    if not srcs:
+        return ""
+    parts = []
+    for s in {x["label"]: x for x in srcs}.values():
+        state = f"updated {_age(s.get('fetched'))}" if s.get("fetched") else e(s.get("error", "unavailable"))
+        if s.get("stale") and s.get("fetched"):
+            state += " (couldn't refresh, using cached copy)"
+        parts.append(f"<a href='{e(s['home'])}' rel='noreferrer noopener'>{e(s['label'])}</a> ({state})")
+    verdict = "<b class='c-critical'>listed</b>" if (r.intel or {}).get("hits") else "<b class='c-good'>no match</b>"
+    return f"<p class='note'>Known-malicious lists checked: {', '.join(parts)}: {verdict}.</p>"
 
 
 def _ownership_html(r: AnalysisResult) -> str:
@@ -400,6 +441,7 @@ def render_html(r: AnalysisResult) -> str:
 <header class="top">{icon}<div><h1>{e(i.name)}</h1>
 <div class="muted">{e((i.description or '')[:220])}</div><div class="meta">{meta_html}</div></div></header>
 
+{_intel_banner(r)}
 <div class="panel"><div class="verdict">{_ring(r.score)}<div>
 <p class="vword" style="color:{_color_for(r.score)}">{e(verdict_word)} risk</p>
 <p style="margin:0">{e(VERDICT_COPY.get(verdict_word, ''))}</p>
@@ -410,6 +452,7 @@ def render_html(r: AnalysisResult) -> str:
 {_bar('Publisher concerns', sc.get('trust_penalty', 0), 'Store and reputation red flags')}
 </div></div></div></div>
 {_glance(r)}
+{_intel_note(r)}
 
 {_changes_section(r)}
 {_llm_section(r)}

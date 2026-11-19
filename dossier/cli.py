@@ -60,6 +60,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-archive", action="store_true",
                     help="Skip the publisher-history lookup in archived store listings (web.archive.org)")
     ap.add_argument("--no-web", action="store_true", help="Skip the AI web search for news and security reports about the extension")
+    ap.add_argument("--no-intel", action="store_true", help="Skip the check against public known-malicious extension lists")
+    ap.add_argument("--update-intel", action="store_true", help="Re-download the known-malicious lists now (normally once a day)")
     ap.add_argument("--config", type=Path, metavar="FILE", help="Use this config.json (API key, model, local model URL)")
     ap.add_argument("--init-config", nargs="?", const="", metavar="FILE",
                     help="Create a ready-to-fill config.json (next to Dossier by default) and exit")
@@ -124,6 +126,7 @@ def main(argv: list[str] | None = None) -> int:
 
     archive = not a.no_archive and file_cfg.get("archive_lookup", True) is not False
     web = not a.no_web and file_cfg.get("web_reputation", True) is not False
+    intel = not a.no_intel and file_cfg.get("threat_intel", True) is not False
     out_dir = a.out.parent if (a.out.suffix.lower() == ".html" and len(jobs) == 1) else a.out
     def work(i: int):
         tgt, kw, suffix = jobs[i]
@@ -131,7 +134,8 @@ def main(argv: list[str] | None = None) -> int:
         keep = (a.keep / _slug(suffix + "_" + Path(tgt).name if suffix else tgt)) if a.keep and len(jobs) > 1 else a.keep
         try:
             return analyze(tgt, llm=cfg if cfg.enabled else None, keep_dir=keep,
-                           log=lambda m: log(tag + m.strip()), archive=archive, web=web, **kw)
+                           log=lambda m: log(tag + m.strip()), archive=archive, web=web,
+                           intel=intel, intel_refresh=a.update_intel, **kw)
         except (FetchError, UnpackError, OSError, ValueError) as e:
             return e
 

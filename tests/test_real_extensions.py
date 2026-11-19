@@ -48,3 +48,9 @@ def test_instant_data_scraper_sale_is_caught():
     timeline = " ".join(e["publisher"] for e in res.ownership["timeline"])
     assert "webrobots" in timeline.lower()
     assert res.verdict in ("High", "Severe")
+
+
+def test_urban_vpn_is_on_known_malicious_lists():
+    res = analyze("eppiocemhmnlbhjplcgkofciiegomcon", log=lambda *_: None, archive=False)
+    assert "intel.known_bad" in _rules(res)
+    assert res.verdict == "Severe"

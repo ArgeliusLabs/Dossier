@@ -18,6 +18,7 @@ from .llm import apply_triage, run_llm
 from .manifest import analyze_manifest, build_permissions, icon_data_uri, load_manifest, resolve_i18n
 from .models import AnalysisResult, ExtensionInfo
 from .ownership import ownership_findings, publisher_history
+from .threatintel import check as check_intel, intel_findings
 from .reputation import reputation_findings, web_reputation
 from .scoring import assign_ids, compute_scores, endpoint_findings, publisher_findings
 from .unpack import extract_package, find_manifest_root
@@ -51,13 +52,15 @@ def tree_hash(root: Path) -> str:
 def analyze(raw_target: str, *, browser: str | None = None, llm: LLMConfig | None = None,
             keep_dir: Path | None = None, log: Log = print,
             store_lookup: tuple[str, str] | None = None, context: dict | None = None,
-            archive: bool = True, web: bool = True) -> AnalysisResult:
+            archive: bool = True, web: bool = True, intel: bool = True,
+            intel_refresh: bool = False) -> AnalysisResult:
     """Analyse one extension.
 
     store_lookup: (store, id) to fetch store reputation for a *local* package, e.g. an installed extension.
     context:      free-form facts shown in the report header (browser profile, enabled state, ...).
     archive:      look up publisher history in archived store listings (web.archive.org).
     web:          ask the AI provider to search the web for reputation reports (OpenAI only).
+    intel:        check public known-malicious extension lists (cached locally).
     """
     t: Target = resolve_target(raw_target, browser)
     info = ExtensionInfo(source=raw_target, browser=t.browser, ext_id=t.ext_id, store_url=t.store_url,
@@ -116,8 +119,11 @@ def analyze(raw_target: str, *, browser: str | None = None, llm: LLMConfig | Non
         first_party -= {"github.com", "google.com", "mozilla.org", "microsoft.com", "githubusercontent.com"}
 
         # Slow network lookups run in the background while the code is scanned.
-        pool = ThreadPoolExecutor(max_workers=2)
-        fut_hist = fut_rep = None
+        pool = ThreadPoolExecutor(max_workers=3)
+        fut_hist = fut_rep = fut_intel = None
+        if intel and info.ext_id:
+            fut_intel = pool.submit(check_intel, info.browser, info.ext_id, info.sha256,
+                                    info.store.get("guid") or gecko.get("id", ""), intel_refresh)
         if lookup and archive and info.browser in ("chrome", "firefox") and not info.store.get("removed"):
             slug = info.store.get("slug") or ("" if info.browser == "chrome" else lookup.ext_id)
             fut_hist = pool.submit(publisher_history, info.browser, info.ext_id, slug, log)
@@ -135,6 +141,8 @@ def analyze(raw_target: str, *, browser: str | None = None, llm: LLMConfig | Non
                                        local_version=info.version if t.kind != "store" else "")
         findings += pub
         hist = _result(fut_hist, {})
+        intel_res = _result(fut_intel, {})
+        findings += intel_findings(intel_res)
         rep = _result(fut_rep, {})
         pool.shutdown(wait=False)
         if hist:
@@ -153,7 +161,7 @@ def analyze(raw_target: str, *, browser: str | None = None, llm: LLMConfig | Non
             info=info, manifest=manifest, permissions=perms, findings=findings, endpoints=cs.endpoints,
             libraries=cs.libraries, noise=dict(cs.noise), file_stats={**cs.stats, "trust_signals": good},
             generated_at=dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z"), tool_version=__version__,
-            ownership=hist, reputation=rep,
+            ownership=hist, reputation=rep, intel=intel_res,
         )
 
         if llm and llm.enabled:

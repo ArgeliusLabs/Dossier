@@ -34,3 +34,11 @@ def make_ext(tmp_path):
 
 
 MV3_BASE = {"manifest_version": 3, "name": "Test Ext", "version": "1.0"}
+
+
+@pytest.fixture(autouse=True)
+def _isolate_network_lookups(request, monkeypatch, tmp_path):
+    """Offline tests never download threat-intel lists; every test gets its own cache folder."""
+    monkeypatch.setenv("DOSSIER_CACHE_DIR", str(tmp_path / "cache"))
+    if "network" not in request.keywords:
+        monkeypatch.setattr("dossier.pipeline.check_intel", lambda *a, **k: {})

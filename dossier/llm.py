@@ -72,6 +72,9 @@ def build_evidence_pack(r: AnalysisResult, snippets: list[dict], max_chars: int 
         "suppressed_noise_counts": r.noise,
         "publisher_history_from_archived_listings": [
             {k: e.get(k) for k in ("date", "publisher", "email")} for e in (r.ownership or {}).get("timeline", [])][:12],
+        "known_malicious_list_matches": [
+            {k: h.get(k) for k in ("label", "name", "reason", "threat", "added", "confirmed", "notes", "links")}
+            for h in (r.intel or {}).get("hits", [])][:6],
         "web_reputation": {k: v for k, v in (r.reputation or {}).items() if k in ("summary", "ownership_change", "concerns", "verdict")},
     }
     text = json.dumps(pack, ensure_ascii=False, default=str)
@@ -162,7 +165,8 @@ def apply_triage(r: AnalysisResult) -> None:
         f = by_id.get(t["id"])
         if f and t["verdict"] in ("confirmed", "downgrade", "likely_benign"):
             # Capability facts from the manifest are not something an LLM can "dismiss".
-            if t["verdict"] != "confirmed" and f.category in ("permissions", "host_access") and f.severity == "critical":
+            if t["verdict"] != "confirmed" and (f.category == "threat_intel" or (
+                    f.category in ("permissions", "host_access") and f.severity == "critical")):
                 f.llm_note = t["reason"]
                 continue
             f.llm_verdict = t["verdict"]

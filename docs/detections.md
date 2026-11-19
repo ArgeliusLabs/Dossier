@@ -113,6 +113,12 @@ come from the code. Rule IDs appear in `--json` output and in history snapshots.
 | `fp.war` | low | Websites can detect it via fixed web-accessible resources |
 | `fp.canvas` | low | Canvas/WebGL/audio fingerprinting techniques |
 
+## Known-malicious lists
+
+| Rule | Severity | Finding |
+|---|---|---|
+| `intel.known_bad` | critical/high/medium | The ID (or package hash) is on a public known-malicious list: critical for confirmed malware or a Mozilla block, high for "suspicious while still listed", medium for store removals over policy |
+
 ## Publisher and store
 
 | Rule | Severity | Finding |

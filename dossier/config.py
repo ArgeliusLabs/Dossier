@@ -6,6 +6,8 @@ Where Dossier looks for config.json (first one found wins):
   3. the folder Dossier is run from as source (the repository root)
   4. ~/.dossier/config.json
 
+Downloaded known-malicious lists are cached in ~/.dossier/cache (override with DOSSIER_CACHE_DIR).
+
 Precedence for each setting: command-line flag > environment variable > config.json > default.
 Environment variables (optional, for scripting): OPENAI_API_KEY, DOSSIER_LLM_API_KEY, DOSSIER_LLM_BASE_URL,
 DOSSIER_LLM_MODEL, DOSSIER_LLM_TIMEOUT, DOSSIER_LLM_JSON_MODE.
@@ -49,6 +51,8 @@ TEMPLATE = """{
   "archive_lookup": true,
   // With OpenAI only: search the web for news and security write-ups about the extension (~2 cents each).
   "web_reputation": true,
+  // Check every extension against public lists of known-malicious extensions (downloaded and cached daily).
+  "threat_intel": true,
 
   // ---- Advanced ----------------------------------------------------------------------
   "timeout_seconds": 180,
@@ -57,7 +61,7 @@ TEMPLATE = """{
 """
 
 KNOWN_KEYS = {"openai_api_key", "model", "base_url", "api_key", "timeout_seconds", "json_mode",
-              "archive_lookup", "web_reputation"}
+              "archive_lookup", "web_reputation", "threat_intel"}
 
 
 class ConfigError(Exception):

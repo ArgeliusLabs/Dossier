@@ -45,6 +45,9 @@ def render_summary(rows: list[dict], title: str = "Extension audit") -> str:
         chg = (f'<div class="chg small">Changed since {e(ch.get("from_version"))}: {len(imp)} important</div>' if imp
                else (f'<div class="muted small">{len(ch.get("items", []))} change(s) since {e(ch.get("from_version"))}</div>' if ch else ""))
         removed = '<div class="c-high small"><b>Not on store</b></div>' if (i.store or {}).get("removed") else ""
+        if (res.intel or {}).get("hits"):
+            removed += ('<div class="small"><span class="pill sev-critical">Known malicious</span> '
+                        + e(", ".join(sorted({h["label"] for h in res.intel["hits"]}))) + "</div>")
         body.append(
             f"<tr><td data-v='{res.score}'><span class='score' style='background:{_color_for(res.score)}'>{res.score}</span></td>"
             f"<td data-v='{ORDER.get(res.verdict, 9)}'><b style='color:{_color_for(res.score)}'>{e(res.verdict)}</b></td>"

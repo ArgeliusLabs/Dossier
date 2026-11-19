@@ -39,6 +39,7 @@ Every report answers four questions, then adds the OPSEC angles generic scanners
 | **What does the code do?** | Remote code loading, `eval` of downloaded data, hooking the page's own `fetch`/`XMLHttpRequest` (the AI-chat harvesting trick), cookie/history/clipboard access, keystroke listeners, proxying, disabling other extensions, stripping security headers, real obfuscation. |
 | **Where does data go?** | Servers used in network calls, classified as analytics, ad pixels, session recording, affiliate networks, remote config, code hosts/tunnels/webhooks, or the publisher's own infrastructure. Hardcoded Telegram-bot, Discord and Slack webhook drop channels are called out. |
 | **Who is behind it?** | Store reputation (users, rating, badges, trader details, privacy disclosures), plus **publisher history from archived copies of the store listing**, which catches extensions that were quietly **sold to a new owner**. With OpenAI, an optional **web search** for news and security write-ups, with sources. |
+| **Is it already known to be bad?** | Every extension is checked against public **known-malicious lists**: the Privacy Commons Institute's [chrome-mal-ids](https://github.com/The-Privacy-Commons-Institute/chrome-mal-ids), [Malicious Extension Sentry](https://github.com/toborrm9/malicious_extension_sentry) (store takedowns, updated daily) and **Mozilla's add-on blocklist**. A hit puts a red banner at the top of the report with the reason and sources. Lists are cached locally and refreshed daily, so the check also works offline. |
 | **Does it say it collects your data?** | The extension's own wording ("we use the URLs you visit…", "anonymous browsing data…") and opt-in / consent screens, the tell-tale signs of browsing-data monetisation. |
 | **OPSEC extras** | Whether websites can **detect you have it installed**, off-store **update URLs**, **enumeration of your other extensions**, embedded credentials, text planted to **sway AI or automated reviewers**, and extensions **pulled from the store** but still installed. |
 
@@ -181,8 +182,10 @@ More in [docs/how-it-works.md](docs/how-it-works.md).
 - Browser profiles are only read, never modified.
 - API keys are read from `config.json` or the environment only, never written into reports, and scrubbed from error
   messages.
-- With `--no-llm`, the only network traffic is to the extension stores and to `web.archive.org` for the publisher
-  history (skip that too with `--no-archive`).
+- With `--no-llm`, the only network traffic is to the extension stores, `web.archive.org` for the publisher history
+  (`--no-archive`), and GitHub / Mozilla to refresh the known-malicious lists once a day (`--no-intel`). The lists are
+  downloaded whole, so nothing reveals which extension you're checking, except Firefox add-on IDs, which are looked
+  up on Mozilla's blocklist API.
 
 ## Development
 

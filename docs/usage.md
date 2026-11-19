@@ -32,6 +32,8 @@ You can pass several targets at once; they are analysed in parallel and summaris
 | `--fail-on {moderate,high,severe}` | Exit with code 2 if any extension reaches that verdict |
 | `--no-llm` | Static analysis only |
 | `--no-archive` | Skip the publisher-history lookup in archived store listings (web.archive.org) |
+| `--no-intel` | Skip the known-malicious list check |
+| `--update-intel` | Re-download the known-malicious lists now (they refresh automatically once a day) |
 | `--no-web` | Skip the AI web search for news and security reports (OpenAI only) |
 | `--init-config [FILE]` | Create a ready-to-fill `config.json` (next to Dossier by default) and exit |
 | `--config FILE` | Use this settings file instead of the default `config.json` |
@@ -62,6 +64,24 @@ Windows, macOS and Linux. For each extension it:
 
 Profiles are only read. A running browser can lock some profile files; the scan still works, but the enabled state may
 show as unknown.
+
+## Known-malicious lists
+
+Every analysed extension, including each one found by `--installed`, is matched against:
+
+| List | Covers | What it contains |
+|---|---|---|
+| [Privacy Commons Institute chrome-mal-ids](https://github.com/The-Privacy-Commons-Institute/chrome-mal-ids) | Chrome, Edge | ~9,000 curated malicious IDs with threat type, notes and source articles |
+| [Malicious Extension Sentry](https://github.com/toborrm9/malicious_extension_sentry) | Chrome, Edge | Extensions removed from the stores (malware, policy, unwanted software) or flagged while still listed; updated daily; includes package hashes |
+| Mozilla add-on blocklist | Firefox | Add-ons Mozilla has blocked, with reason and bug link (live API + legacy list) |
+
+Matches are by extension ID and also by package SHA-256, which catches a known-bad package re-uploaded under a new ID.
+Severity: confirmed malware is **critical**, "suspicious while still listed" is **high**, and a store removal for policy
+or bundled software is **medium**. The AI analyst can't dismiss a list match.
+
+The lists are downloaded whole into `~/.dossier/cache/` (set `DOSSIER_CACHE_DIR` to change it) and refreshed once a
+day. If a refresh fails, the cached copy is used and the report says how old it is. The report always states which
+lists were checked and when they were last updated.
 
 ## Ownership changes
 
