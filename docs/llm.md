@@ -5,27 +5,44 @@ section and a false-positive triage of every finding.
 
 ## Configuration
 
-Dossier talks to any **OpenAI-compatible** chat-completions endpoint. Settings come from environment variables or a
-`.env` file (current folder, the repository folder, or next to the standalone binary). Environment variables win.
+Dossier talks to any **OpenAI-compatible** chat-completions endpoint. Everything is set in one file, **`config.json`**.
 
-| Variable | Default | Notes |
+- **Release downloads** include `config.json` next to the program. Open it in a text editor.
+- **From source**, run `dossier --init-config` once. It creates `config.json` in the repository folder (or in
+  `~/.dossier/` if that folder isn't writable).
+
+The file allows `//` comments and trailing commas, and explains every setting inside it:
+
+| Setting | Default | What it's for |
 |---|---|---|
-| `OPENAI_API_KEY` | | Used for OpenAI. With no key and no local URL, the AI step is skipped. |
-| `DOSSIER_LLM_BASE_URL` | OpenAI | e.g. `http://localhost:11434/v1` (Ollama), `http://localhost:1234/v1` (LM Studio), a vLLM or OpenRouter URL |
-| `DOSSIER_LLM_MODEL` | `gpt-5.4-mini` | Set this whenever you change the base URL |
-| `DOSSIER_LLM_API_KEY` | falls back to `OPENAI_API_KEY` | Hosted non-OpenAI endpoints. Local servers don't need one. |
-| `DOSSIER_LLM_TIMEOUT` | `180` | Seconds per request |
-| `DOSSIER_LLM_JSON_MODE` | `1` | Set `0` if your server rejects `response_format` (Dossier also retries without it automatically) |
+| `openai_api_key` | `""` | Your OpenAI key (`sk-...`). With no key and no local `base_url`, the AI step is skipped. |
+| `model` | `gpt-5.4-mini` | The model name. Change it whenever you change `base_url`. |
+| `base_url` | `""` (OpenAI) | A local or other OpenAI-compatible server, e.g. `http://localhost:11434/v1` (Ollama) or `http://localhost:1234/v1` (LM Studio) |
+| `api_key` | `""` | Only for other hosted services such as OpenRouter. Local servers don't need a key. |
+| `timeout_seconds` | `180` | Per request |
+| `json_mode` | `true` | Set `false` if your server rejects `response_format` (Dossier also retries without it automatically) |
 
-`--model` and `--base-url` override these for a single run; `--no-llm` disables the AI step.
+Each run prints which config file it used. If the file has a typo, Dossier names the line and column instead of
+failing silently.
+
+**Where it looks**, first match wins: `--config FILE`, then `config.json` next to the program (or in the repository
+folder when run from source), then `~/.dossier/config.json`.
+
+**Overrides for scripting.** Command-line flags (`--model`, `--base-url`) beat environment variables, which beat the
+file. The environment variables are `OPENAI_API_KEY`, `DOSSIER_LLM_API_KEY`, `DOSSIER_LLM_BASE_URL`,
+`DOSSIER_LLM_MODEL`, `DOSSIER_LLM_TIMEOUT` and `DOSSIER_LLM_JSON_MODE`. `--no-llm` turns the AI step off for a run.
 
 ### Local models
 
 ```bash
 ollama pull qwen2.5-coder:14b
-export DOSSIER_LLM_BASE_URL=http://localhost:11434/v1
-export DOSSIER_LLM_MODEL=qwen2.5-coder:14b
-dossier <target>
+```
+
+then in `config.json`:
+
+```jsonc
+"model": "qwen2.5-coder:14b",
+"base_url": "http://localhost:11434/v1",
 ```
 
 When the base URL points at localhost, Dossier sends a smaller evidence pack (about 24k characters instead of 60k) to fit

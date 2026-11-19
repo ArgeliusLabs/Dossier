@@ -31,8 +31,10 @@ You can pass several targets at once; they are analysed in parallel and summaris
 | `--no-history` | Don't save or compare history snapshots |
 | `--fail-on {moderate,high,severe}` | Exit with code 2 if any extension reaches that verdict |
 | `--no-llm` | Static analysis only |
-| `--model NAME` | LLM model for this run (overrides `DOSSIER_LLM_MODEL`) |
-| `--base-url URL` | OpenAI-compatible endpoint for this run (overrides `DOSSIER_LLM_BASE_URL`) |
+| `--init-config [FILE]` | Create a ready-to-fill `config.json` (next to Dossier by default) and exit |
+| `--config FILE` | Use this settings file instead of the default `config.json` |
+| `--model NAME` | AI model for this run (overrides `config.json`) |
+| `--base-url URL` | OpenAI-compatible endpoint for this run (overrides `config.json`) |
 | `-j, --jobs N` | Extensions analysed in parallel (default 4) |
 | `--keep DIR` | Keep a copy of the unpacked extension for manual review |
 | `--open` | Open the report, or the summary dashboard for several targets, in your browser |

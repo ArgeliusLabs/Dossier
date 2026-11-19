@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import __version__
-from .config import llm_config, load_dotenv
+from .config import ConfigError, default_init_path, llm_config, load_config, write_template
 from .fetch import FetchError
 from .unpack import UnpackError
 
@@ -34,7 +34,6 @@ VERDICT_LEVEL = {"Low": 0, "Moderate": 1, "High": 2, "Severe": 3}
 
 
 def main(argv: list[str] | None = None) -> int:
-    load_dotenv()
     ap = argparse.ArgumentParser(
         prog="dossier",
         description="Dossier: OPSEC-focused risk analysis of Chrome / Edge / Firefox extensions. Produces a self-contained HTML report.",
@@ -52,14 +51,32 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fail-on", choices=["moderate", "high", "severe"],
                     help="Exit with code 2 if any extension reaches this verdict (for scripts / CI)")
     ap.add_argument("--no-llm", action="store_true", help="Static analysis only; nothing leaves your machine except store requests")
-    ap.add_argument("--model", help="LLM model name (overrides DOSSIER_LLM_MODEL)")
-    ap.add_argument("--base-url", help="OpenAI-compatible base URL, e.g. http://localhost:11434/v1 (overrides DOSSIER_LLM_BASE_URL)")
+    ap.add_argument("--config", type=Path, metavar="FILE", help="Use this config.json (API key, model, local model URL)")
+    ap.add_argument("--init-config", nargs="?", const="", metavar="FILE",
+                    help="Create a ready-to-fill config.json (next to Dossier by default) and exit")
+    ap.add_argument("--model", help="LLM model name for this run (overrides config.json)")
+    ap.add_argument("--base-url", help="OpenAI-compatible base URL for this run, e.g. http://localhost:11434/v1")
     ap.add_argument("--keep", type=Path, metavar="DIR", help="Keep a copy of the unpacked extension in DIR for manual review")
     ap.add_argument("--open", action="store_true", help="Open the report (or the summary for several) in your browser when done")
     ap.add_argument("-j", "--jobs", type=int, default=4, help="Extensions to analyse in parallel (default 4)")
     ap.add_argument("-q", "--quiet", action="store_true")
     ap.add_argument("--version", action="version", version=f"Dossier {__version__}")
     a = ap.parse_args(argv)
+
+    if a.init_config is not None:
+        try:
+            p = write_template(Path(a.init_config) if a.init_config else default_init_path())
+        except ConfigError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        print(f"Created {p.resolve()}")
+        print("Open it in a text editor and paste your OpenAI key (or set a local model).")
+        return 0
+    try:
+        file_cfg, cfg_path = load_config(a.config)
+    except ConfigError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
 
     from .diff import compare, find_previous, load_baseline, save_snapshot, snapshot
     from .installed import discover_all
@@ -88,12 +105,13 @@ def main(argv: list[str] | None = None) -> int:
     if not jobs:
         ap.error("give at least one target, or use --installed")
 
-    cfg = llm_config(no_llm=a.no_llm, model=a.model, base_url=a.base_url)
+    cfg = llm_config(no_llm=a.no_llm, model=a.model, base_url=a.base_url, file_cfg=file_cfg, source=cfg_path)
     log = (lambda *_: None) if a.quiet else (lambda m: print(m, file=sys.stderr))
     if not a.no_llm and not cfg.enabled:
-        log("No LLM API key found (OPENAI_API_KEY / DOSSIER_LLM_API_KEY) - running static analysis only.")
+        where = f"Add your OpenAI key to {cfg_path}" if cfg_path else "Run `dossier --init-config` and add your OpenAI key"
+        log(f"No AI key set - running static analysis only. {where} (or set a local model) to enable the AI analyst.")
     elif cfg.enabled:
-        log(f"LLM: {cfg.provider_label}, model {cfg.model}")
+        log(f"AI: {cfg.provider_label}, model {cfg.model}" + (f" (settings from {cfg_path})" if cfg_path else ""))
 
     out_dir = a.out.parent if (a.out.suffix.lower() == ".html" and len(jobs) == 1) else a.out
     def work(i: int):

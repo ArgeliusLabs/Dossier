@@ -61,6 +61,9 @@ extract it, and run `dossier` (`dossier.exe` on Windows).
 | Linux x64 | `dossier-linux-x64.tar.gz` |
 | macOS Apple Silicon | `dossier-macos-arm64.tar.gz` |
 
+Each download contains the `dossier` program, a ready-to-fill **`config.json`** (where your API key goes, see
+[AI analysis](#ai-analysis-openai-or-a-local-model)) and a one-page **`QUICKSTART.txt`**.
+
 `SHA256SUMS.txt` is attached to every release. The binaries are not code-signed: Windows SmartScreen may warn on first
 run, and on macOS you may need `xattr -d com.apple.quarantine ./dossier`.
 
@@ -71,6 +74,7 @@ git clone https://github.com/ArgeliusLabs/Dossier.git
 cd Dossier
 pip install -e ".[llm]"        # drop [llm] for static analysis only; the core has no dependencies
 dossier --version
+dossier --init-config          # creates config.json in the repository folder for your API key
 ```
 
 You can also run it without installing: `python -m dossier ...` from the repository folder.
@@ -109,21 +113,26 @@ The full option list is in [docs/usage.md](docs/usage.md).
 The static analysis works entirely without an LLM. With one, Dossier adds an analyst write-up and a false-positive
 triage. It uses any **OpenAI-compatible** endpoint, so switching from OpenAI to a local model is one setting.
 
-```bash
-# OpenAI (default model: gpt-5.4-mini)
-export OPENAI_API_KEY=sk-...
+**All settings live in one file, `config.json`.** The release downloads already include it, next to the program. From
+source, create it once with `dossier --init-config`. Open it in any text editor and fill in what you need. Comments
+inside the file explain each line:
 
-# Ollama
-export DOSSIER_LLM_BASE_URL=http://localhost:11434/v1
-export DOSSIER_LLM_MODEL=qwen2.5-coder:14b
+```jsonc
+{
+  // Option A: OpenAI. Paste your key between the quotes.
+  "openai_api_key": "sk-...",
+  "model": "gpt-5.4-mini",
 
-# LM Studio
-export DOSSIER_LLM_BASE_URL=http://localhost:1234/v1
-export DOSSIER_LLM_MODEL=<loaded model name>
+  // Option B: a local model instead. Set base_url and change "model" to your local model's name.
+  //   Ollama:    "http://localhost:11434/v1"   LM Studio: "http://localhost:1234/v1"
+  "base_url": "",
+  ...
+}
 ```
 
-On Windows PowerShell use `$env:OPENAI_API_KEY = "sk-..."`. You can also put these in a `.env` file in the current
-folder or next to the binary; see [`.env.example`](.env.example). `.env` is git-ignored.
+That's it: the next run picks it up and says which file it used. `config.json` is git-ignored, so your key won't be
+committed by accident. Environment variables (`OPENAI_API_KEY`, `DOSSIER_LLM_MODEL`, …) and the `--model` /
+`--base-url` / `--config` flags still work and override the file, which is handy for scripting.
 
 The model can only **lower** a finding's weight (and never dismiss critical manifest-level capabilities); it never raises
 a score. Everything inside the extension is passed to it as untrusted data. Details, costs and model advice are in
@@ -161,7 +170,8 @@ More in [docs/how-it-works.md](docs/how-it-works.md).
 - Reports load **nothing from the network** (no fonts, no CDNs), carry a strict Content-Security-Policy and
   `no-referrer`, and HTML-escape everything that came from the extension, the store or the LLM.
 - Browser profiles are only read, never modified.
-- API keys are read from the environment or `.env` only and are scrubbed from error messages.
+- API keys are read from `config.json` or the environment only, never written into reports, and scrubbed from error
+  messages.
 - With `--no-llm`, the only network traffic is to the extension stores.
 
 ## Development

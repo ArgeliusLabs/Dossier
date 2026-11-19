@@ -1,0 +1,29 @@
+DOSSIER - QUICK START
+=====================
+
+1. (Optional) Turn on the AI analyst
+   Open config.json (in this folder) with any text editor and paste your OpenAI key
+   between the quotes on the "openai_api_key" line. Save it.
+   No key? Dossier still works; you just don't get the AI write-up.
+   Prefer a local model (Ollama / LM Studio)? Instructions are inside config.json.
+
+2. Open a terminal in this folder
+   Windows: right-click the folder background > "Open in Terminal"
+   macOS/Linux: open Terminal and cd into this folder
+
+3. Analyse an extension (paste a store link, an ID, or a .crx/.xpi file)
+   Windows:      .\dossier.exe https://chromewebstore.google.com/detail/<name>/<id> --open
+   macOS/Linux:  ./dossier https://addons.mozilla.org/firefox/addon/<name>/ --open
+
+   Audit everything installed in your own browsers:
+   Windows:      .\dossier.exe --installed --open
+   macOS/Linux:  ./dossier --installed --open
+
+Reports are saved in a "reports" folder and open in your browser with --open.
+Run with --help for every option.
+
+macOS: if it says the app can't be opened, run once:  xattr -d com.apple.quarantine ./dossier
+Windows: if SmartScreen warns, click "More info" > "Run anyway" (the binary is not code-signed).
+
+Keep config.json private: it contains your API key.
+Docs: https://github.com/ArgeliusLabs/Dossier

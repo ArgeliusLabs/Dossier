@@ -41,15 +41,18 @@ jobs:
           ./dist/dossier --version
           ./dist/dossier examples/demo-risky-extension --no-llm --no-history -o smoke -q
           ls smoke/*.html
+      - name: Add ready-to-fill config.json and quick start
+        shell: bash
+        run: |
+          ./dist/dossier --init-config dist/config.json
+          cp packaging/QUICKSTART.txt README.md LICENSE dist/
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path dist/dossier.exe, README.md, .env.example -DestinationPath ${{ matrix.asset }}
+        run: Compress-Archive -Path dist/dossier.exe, dist/config.json, dist/QUICKSTART.txt, dist/README.md, dist/LICENSE -DestinationPath ${{ matrix.asset }}
       - name: Package (Linux/macOS)
         if: runner.os != 'Windows'
-        run: |
-          cp README.md .env.example dist/
-          tar -czf ${{ matrix.asset }} -C dist dossier README.md .env.example
+        run: tar -czf ${{ matrix.asset }} -C dist dossier config.json QUICKSTART.txt README.md LICENSE
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
