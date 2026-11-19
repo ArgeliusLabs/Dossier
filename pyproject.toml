@@ -8,6 +8,7 @@ version = "1.1.0"
 description = "OPSEC-focused risk analysis of Chrome, Edge and Firefox extensions, with a self-contained HTML report."
 readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
 dependencies = []
 
 [project.optional-dependencies]

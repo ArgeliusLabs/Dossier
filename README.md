@@ -188,3 +188,7 @@ dossier/
   report.py      HTML report                summary.py    multi-extension dashboard
 examples/demo-risky-extension/   inert teaching sample that trips most detections
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
