@@ -67,7 +67,7 @@ change: in an investigation profile, that exposure is real either way.
 | 40-64 | **High** | Significant access or risky behaviour; use only if you need it and accept the exposure |
 | 65-100 | **Severe** | Don't install in any profile you care about without manually reviewing the flagged code |
 
-## Reference points (November 2026, v1.5)
+## Reference points (November 2026, v1.6)
 
 | Extension | Verdict | Why |
 |---|---|---|
@@ -75,10 +75,10 @@ change: in an investigation profile, that exposure is real either way.
 | Dark Reader | Low (12) | All-site access, Mozilla Recommended, config fetched from its own GitHub |
 | uBlock Origin (Firefox) | Moderate (18) | Like uBO Lite, but MV2 with blocking interception of all traffic and injected code strings |
 | Wappalyzer | High (41) | Cookies on every site; its own text says it sends anonymous data about the websites you visit |
-| Bitwarden | High (58) | Legitimately enormous access: clipboard, screenshots, native app, privacy settings |
+| Bitwarden | High exposure (52-58) | Legitimately enormous access (clipboard, screenshots, native app, privacy settings) with no red flags: labelled *powerful by design* |
 | PayPal Honey | Severe (66) | Cookies on every site, hooks page network calls and relays them, native-app token exchange |
 | Instant Data Scraper | Severe (66) | Sold to a new owner in early 2026; consent screens, "we use the URLs you visit", Mixpanel/GA analytics |
-| Grammarly | Severe (72) | Cookies everywhere, native messaging, code-string injection, analytics |
+| Grammarly | High-Severe (64-72) | Cookies everywhere, native messaging, analytics; web reports push it to Severe |
 | Urban VPN | Severe (100) | On known-malicious lists; hooks page `fetch`/XHR and relays it, disables other extensions, proxies all traffic |
 
 A legitimate tool can score High: the score measures **exposure**, not intent. The AI section's "Is the access

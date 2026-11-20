@@ -631,6 +631,12 @@ def _build_rule_findings(hits: dict[str, list[tuple[JsFile, int, int]]]) -> list
                       "it sees back to the extension or a server (no postMessage, custom events, extension messaging "
                       "or beacons). This is how content blockers neutralise ads and trackers. It still means the code "
                       f"runs inside the page and can alter what the site receives. Seen in {files} file(s).")
+        elif rid == "code.exec_code_string" and all(
+                re.search(r"\.toString\s*\(\s*\)", js.code[s:e + 300]) for js, s, e in items):
+            sev = "medium"
+            detail += (" Every occurrence serialises one of the extension's own functions (fn.toString()) into the page, "
+                       "so the injected code ships inside the package; this is a common MV2-compatible pattern, not "
+                       "remote code.")
         elif rid == "code.exec_code_string" and not any(re.search(r"fetch\s*\(|XMLHttpRequest", js.code) for js, _, _ in items):
             sev = "medium"
             detail += (" The files that do this don't download anything themselves, so the injected code is most likely "

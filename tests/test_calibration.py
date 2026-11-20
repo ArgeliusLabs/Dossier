@@ -98,3 +98,11 @@ def test_powerful_but_clean_tools_are_framed_as_by_design():
     assert s["verdict"] == "High" and s["by_design"]
     s = compute_scores(heavy + [F("net.analytics", "network", "medium")], CLEAN_CTX)
     assert not s["by_design"]
+
+
+def test_injecting_own_serialised_function_is_not_remote_code(make_ext):
+    src = ("fetch('/api/sync');"
+           "chrome.tabs.executeScript(tabId, {code: `(${fillForm.toString()})()`});")
+    res = analyze(str(make_ext({**MV3_BASE, "background": {"service_worker": "bg.js"}}, {"bg.js": src})),
+                  log=lambda *_: None)
+    assert next(f for f in res.findings if f.rule == "code.exec_code_string").severity == "medium"
