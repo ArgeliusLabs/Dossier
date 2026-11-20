@@ -106,3 +106,23 @@ def test_injecting_own_serialised_function_is_not_remote_code(make_ext):
     res = analyze(str(make_ext({**MV3_BASE, "background": {"service_worker": "bg.js"}}, {"bg.js": src})),
                   log=lambda *_: None)
     assert next(f for f in res.findings if f.rule == "code.exec_code_string").severity == "medium"
+
+
+def test_privacy_cleaner_wording_is_not_collection(make_ext):
+    root = make_ext({**MV3_BASE, "default_locale": "en"},
+                    {"_locales/en/messages.json": '{"a": {"message": "Delete your browsing history and cookies when you close the browser."}}'})
+    assert "data.disclosed_collection" not in {f.rule for f in analyze(str(root), log=lambda *_: None).findings}
+
+
+def test_builtin_component_is_not_removed_from_store():
+    from dossier.scoring import publisher_findings
+    f, good = publisher_findings({"store": "Chrome Web Store", "removed": True}, False, "chrome",
+                                 ext_id="nmmhkkegccagdldgiimedpiccmgmieda")
+    assert [x.rule for x in f] == ["pub.builtin"] and good
+
+
+def test_minor_web_report_is_not_a_red_flag():
+    from dossier.scoring import red_flags
+    assert red_flags([F("web.reported_concerns", "trust", "medium", "medium")]) == set()
+    assert red_flags([F("web.reported_concerns", "trust", "high", "medium")]) == {"web.reported_concerns"}
+    assert red_flags([F("pub.owner_changed", "trust", "high", llm="downgrade")]) == set()

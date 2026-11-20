@@ -777,14 +777,24 @@ def _collect_disclosures(rel: str, text: str, out: dict[str, str]) -> None:
         ends = [x for x in (text.find(".", m.end()), text.find('"', m.end()), text.find("\n", m.end())) if x >= 0]
         b = min(ends) + 1 if ends else len(text)
         sentence = re.sub(r"\s+", " ", text[a:b]).strip(' "')[:240]
-        if len(out) < 20 and len(sentence) > 15:
+        if _PROTECTIVE.search(sentence) and not _COLLECTING.search(sentence):
+            continue   # "Delete your browsing data", "Block trackers from collecting...": privacy tools, not collectors
+        if len(out) < 20 and len(sentence) > 25:
             out.setdefault(sentence, rel)
+
+
+_PROTECTIVE = re.compile(r"\b(?:delet|clear|eras|remov|wip|clean|purg|protect|block|prevent|stop|hid|guard|"
+                         r"anti-?track|privacy\s+(?:mode|protection))\w*", re.I)
+_COLLECTING = re.compile(r"\b(?:we|our|this extension|it)\s+(?:collect|use|share|sell|send|transmit|store|process|analy)\w*"
+                         r"|\b(?:share|sell)\w*\s+[^.]{0,40}\bwith\b", re.I)
 
 
 def _data_collection_findings(disclosures: dict[str, str], consent_files: set[str]) -> list[Finding]:
     out = []
     if disclosures:
-        ev = [Evidence(f, None, s) for s, f in list(disclosures.items())[:5]]
+        # Strongest first: sentences where the extension says *it* collects/uses/shares the data.
+        ranked = sorted(disclosures.items(), key=lambda kv: (not _COLLECTING.search(kv[0]), -len(kv[0])))
+        ev = [Evidence(f, None, s) for s, f in ranked[:5]]
         out.append(Finding(
             "data.disclosed_collection", "data_collection", "high",
             "Its own text says it collects your browsing data",

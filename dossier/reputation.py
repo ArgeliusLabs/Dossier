@@ -17,7 +17,7 @@ from .models import Evidence, ExtensionInfo, Finding
 
 PROMPT = """You are checking the public reputation of a browser extension for OSINT investigators and OPSEC-conscious users.
 
-Extension: {name}
+Extension: {name} (current version {version})
 Store: {store} (ID {ext_id})
 Current publisher: {publisher}
 Publisher website / contact: {contact}
@@ -34,6 +34,8 @@ Only list concerns about THIS extension (this ID / this publisher). Do NOT list:
 imitate it, antivirus false positives that were retracted, general criticism of a whole category, or problems with a
 different product that shares the name, or performance/bug complaints. Concerns must be about security, privacy,
 data handling, ownership or store enforcement. If those are the only things you found, return no concerns.
+A concern that only affected an older, fixed version gets severity "low". The publisher's own documentation of what
+the product does is not a concern unless it reveals collection or sharing a user would not expect.
 
 Reply with ONLY a JSON object:
 {{
@@ -69,7 +71,7 @@ def web_reputation(cfg: LLMConfig, info: ExtensionInfo) -> dict:
         return {}
     i, st = info, info.store or {}
     prompt = PROMPT.format(
-        name=i.name, store=st.get("store") or i.browser, ext_id=i.ext_id or "unknown",
+        name=i.name, version=i.version or "unknown", store=st.get("store") or i.browser, ext_id=i.ext_id or "unknown",
         publisher=st.get("publisher") or i.author or "unknown",
         contact=", ".join(x for x in (st.get("publisher_url"), st.get("support_email"), i.homepage) if x) or "unknown",
         description=(i.description or "")[:300])

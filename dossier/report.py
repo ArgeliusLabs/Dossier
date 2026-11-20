@@ -8,7 +8,7 @@ from __future__ import annotations
 import html
 
 from .models import AnalysisResult, Finding, SEVERITIES
-from .scoring import category_label
+from .scoring import CAPABILITY_CATS, category_label, red_flags
 
 e = lambda s: html.escape(str(s if s is not None else ""), quote=True)  # noqa: E731
 
@@ -58,6 +58,7 @@ header.top img{width:64px;height:64px;border-radius:12px;background:var(--code)}
 .pill{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:2px 8px;border-radius:999px;color:#fff;white-space:nowrap}
 .sev-critical{background:var(--critical)}.sev-high{background:var(--high)}.sev-medium{background:var(--medium)}
 .sev-low{background:var(--low)}.sev-info{background:var(--info)}.sev-good{background:var(--good)}
+.sev-cap{background:var(--code);color:var(--muted);border:1px solid var(--line)}details.f.cap{border-left-color:var(--line)}
 .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .c-critical{color:var(--critical)}.c-high{color:var(--high)}.c-medium{color:var(--medium)}.c-low{color:var(--low)}.c-info{color:var(--info)}.c-good{color:var(--good)}
 details.f{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--info);border-radius:8px;margin:8px 0;box-shadow:var(--shadow)}
@@ -112,7 +113,7 @@ def _bar(label: str, val: int, hint: str) -> str:
             f'<div class="muted">{e(hint)}</div></div>')
 
 
-def _finding(f: Finding) -> str:
+def _finding(f: Finding, muted: bool = False) -> str:
     ev = "".join(
         f'<div class="evf mono">{e(x.file)}{(":" + str(x.line)) if x.line else ""}</div>'
         + (f"<pre>{e(x.snippet[:600])}</pre>" if x.snippet else "")
@@ -125,7 +126,9 @@ def _finding(f: Finding) -> str:
         ai = f'<div class="ai"><b>{e(label)}.</b> {e(f.llm_note)}</div>'
     opsec = f'<div class="opsec"><b>OPSEC:</b> {e(f.opsec)}</div>' if f.opsec else ""
     conf = "" if f.confidence == "high" else f' <span class="tag">{e(f.confidence)} confidence</span>'
-    return (f'<details class="f {e(f.severity)}"><summary>{_sev_pill(f.severity)}<span class="t">{e(f.title)}</span>'
+    pill = (f'<span class="pill sev-cap">Access · {e(SEV_LABEL.get(f.severity, f.severity))}</span>' if muted
+            else _sev_pill(f.severity))
+    return (f'<details class="f {"cap" if muted else e(f.severity)}"><summary>{pill}<span class="t">{e(f.title)}</span>'
             f'<span class="tag">{e(CAT_LABEL.get(f.category, f.category))}</span>{conf}<span class="id">{e(f.id)}</span></summary>'
             f'<div class="body"><p>{e(f.detail)}</p>{opsec}{ai}{ev}{more}</div></details>')
 
@@ -212,6 +215,9 @@ def _llm_section(r: AnalysisResult) -> str:
 BY_DESIGN_COPY = ("Powerful by design, with no signs of abuse: no tracking, no change of owner, nothing on known-malicious "
                   "lists. The rating reflects how much it could expose if it were compromised or turned bad, so only keep "
                   "it in profiles where that access is acceptable.")
+MODERATE_PROPORTIONATE_COPY = ("No signs of misuse, and trust credits for an established publisher. It stays Moderate "
+                               "only because of how much it can reach (see 'What it can do'), which matters if it is "
+                               "ever compromised or sold.")
 PROPORTIONATE_COPY = ("Broad access, used proportionately: an established publisher and clean behaviour. The access is "
                       "real, though; it is one update away from being abused, so keep watching for changes.")
 
@@ -354,16 +360,33 @@ def render_html(r: AnalysisResult) -> str:
 
     active = [f for f in r.findings if f.llm_verdict != "likely_benign"]
     benign = [f for f in r.findings if f.llm_verdict == "likely_benign"]
-    groups = []
+    clean = not red_flags(r.findings)
+    does = [f for f in active if f.category not in CAPABILITY_CATS]
+    can = [f for f in active if f.category in CAPABILITY_CATS]
+    groups = ['<h3>What it does</h3><p class="note" style="margin-top:-4px">Behaviour found in the code, network '
+              'traffic, publisher history and reputation.</p>']
     for sev in SEVERITIES:
-        fs = [f for f in active if f.severity == sev]
+        fs = [f for f in does if f.severity == sev]
         if fs:
-            groups.append(f'<h3>{e(SEV_LABEL[sev])} <span class="muted small">({len(fs)})</span></h3>' + "".join(_finding(f) for f in fs))
+            groups.append(f'<h4 class="muted small" style="margin:10px 0 4px">{e(SEV_LABEL[sev])} ({len(fs)})</h4>'
+                          + "".join(_finding(f) for f in fs))
+    if not does:
+        groups.append("<p class='muted'>Nothing notable.</p>")
+    if can:
+        intro = ("No warning signs were found, so these describe access the extension <b>has</b>, not something it is "
+                 "doing to you. Judge them against what the tool is for (a clipper or blocker needs to read pages); they "
+                 "matter if it is ever compromised or sold." if clean else
+                 "Access granted by its permissions. Combined with the behaviour above, this is what's at stake.")
+        groups.append(f"<h3 style='margin-top:22px'>What it can do <span class='muted small'>(permissions and access)</span></h3>"
+                      f"<p class='note' style='margin-top:-4px'>{intro}</p>"
+                      + "".join(_finding(f, muted=clean) for f in sorted(can, key=lambda f: SEVERITIES.index(f.severity))))
     if benign:
         groups.append(f'<h3>Probably not a concern <span class="muted small">({len(benign)}, dismissed by AI triage, still shown for transparency)</span></h3>'
                       + "".join(_finding(f) for f in benign))
-    counts = {s: sum(1 for f in active if f.severity == s) for s in SEVERITIES}
-    count_line = " · ".join(f'<span class="c-{s}"><b>{counts[s]}</b> {SEV_LABEL[s].lower()}</span>' for s in SEVERITIES if counts[s])
+    counts = {s: sum(1 for f in does if f.severity == s) for s in SEVERITIES}
+    count_line = ("Behaviour: " + (" · ".join(f'<span class="c-{s}"><b>{counts[s]}</b> {SEV_LABEL[s].lower()}</span>'
+                                               for s in SEVERITIES if counts[s]) or "nothing notable")
+                  + f" &nbsp;|&nbsp; Access findings: <b>{len(can)}</b>")
 
     # permissions
     order = {s: n for n, s in enumerate(SEVERITIES)}
@@ -464,7 +487,7 @@ def render_html(r: AnalysisResult) -> str:
 {_intel_banner(r)}
 <div class="panel"><div class="verdict">{_ring(r.score)}<div>
 <p class="vword" style="color:{_color_for(r.score)}">{e(verdict_word)} {'exposure' if sc.get('by_design') else 'risk'}</p>
-<p style="margin:0">{e(PROPORTIONATE_COPY if sc.get('proportionate') else BY_DESIGN_COPY if sc.get('by_design') else VERDICT_COPY.get(verdict_word, ''))}</p>
+<p style="margin:0">{e((PROPORTIONATE_COPY if verdict_word == 'Low' else MODERATE_PROPORTIONATE_COPY) if sc.get('proportionate') else BY_DESIGN_COPY if sc.get('by_design') else VERDICT_COPY.get(verdict_word, ''))}</p>
 <p class="note">{count_line}</p>
 {_credits_html(sc)}
 <div class="bars">

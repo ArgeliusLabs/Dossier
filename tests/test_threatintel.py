@@ -119,3 +119,21 @@ def test_hit_shows_banner_and_cannot_be_dismissed_by_ai(fake_net, make_ext, monk
     assert res.findings[-1].llm_verdict == ""
     html = render_html(res)
     assert "On a public list of known-malicious extensions" in html and "research.example" in html
+
+
+def test_mozilla_block_only_counts_for_blocked_versions(monkeypatch):
+    block = {"guid": "foxyproxy@eric.h.jung", "blocked": [], "soft_blocked": ["6.6"], "reason": "Version deleted",
+             "is_all_versions": False, "addon_name": {"en-US": "FoxyProxy"}}
+    monkeypatch.setattr(T, "_amo_block", lambda g: block)
+    monkeypatch.setattr(T, "load_source", lambda *a, **k: ({}, {"label": "x", "home": "h"}))
+    assert T.check("firefox", "x", guid="foxyproxy@eric.h.jung", version="9.9")["hits"] == []
+    # housekeeping reason: ignored even for the listed version
+    assert T.check("firefox", "x", guid="foxyproxy@eric.h.jung", version="6.6")["hits"] == []
+    block.update(reason="Malware: steals credentials", soft_blocked=[], blocked=["1.0"])
+    assert T.check("firefox", "x", guid="foxyproxy@eric.h.jung", version="1.0")["hits"]
+    assert not T.check("firefox", "x", guid="foxyproxy@eric.h.jung", version="2.0")["hits"]
+
+
+def test_legacy_blocklist_version_ranges():
+    assert T._in_ranges("1.5", [["1.0", "2.0"]]) and not T._in_ranges("2.1", [["1.0", "2.0"]])
+    assert T._in_ranges("9", [["0", "*"]]) and T._in_ranges("", [["1", "2"]])

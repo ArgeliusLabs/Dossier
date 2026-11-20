@@ -220,6 +220,19 @@ TRACKERS: dict[str, tuple[str, str]] = {
     "sovrn.com": ("affiliate", "Sovrn affiliate"),
 }
 
+# Extensions the browser installs itself (components / default apps). They often have no store listing.
+BUILTIN_EXTENSIONS = {
+    "nmmhkkegccagdldgiimedpiccmgmieda": "Chrome Web Store Payments (Google component)",
+    "mhjfbmdgcfjbbpaeojofohoefgiehjai": "Chrome PDF Viewer (Google component)",
+    "pkedcjkdefgpdelpbcmbmeomcjbeemfm": "Chrome Media Router (Google component)",
+    "fignfifoniblkonapihmkfakmlgkbkcf": "Google Hangouts / Meet services (Google component)",
+    "jmjflgjpcpepeafmmgdpfkogkghcpiha": "Edge relevant text changes (Microsoft component)",
+    "ncbjelpjchkpbikbpkcchkhkblodoama": "WebRTC Internals extension (Microsoft component)",
+    "ihmafllikibpmigkcoadcmckbfhibefp": "Edge Feedback (Microsoft component)",
+    "dgiklkfkllikcanfonkcabmbdfmgleag": "Microsoft Clipboard extension (Microsoft component)",
+    "kmendfapggjehodndflmmgagdbamhnfd": "CryptoTokenExtension (Google component)",
+}
+
 # Where content blockers download their block lists from: expected traffic, not telemetry.
 FILTER_LIST_HOSTS = {
     "someonewhocares.org", "easylist.to", "easylist-downloads.adblockplus.org", "secure.fanboy.co.nz",

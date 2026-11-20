@@ -98,7 +98,12 @@ def main(argv: list[str] | None = None) -> int:
     # ---- build the job list ---------------------------------------------------------------
     jobs: list[tuple[str, dict, str]] = []   # (target, analyze kwargs, file-name suffix)
     if a.installed or a.list_installed:
+        known = {"chrome", "edge", "brave", "chromium", "vivaldi", "opera", "firefox"}
         wanted = None if (a.installed in (None, "all")) else {b.strip().lower() for b in a.installed.split(",")}
+        if wanted and not wanted <= known:
+            # "--installed <target>": argparse took the target as the browser list; give it back.
+            a.targets.insert(0, a.installed)
+            wanted = None
         found = discover_all(wanted)
         if not found:
             print("No installed extensions found in local browser profiles.", file=sys.stderr)

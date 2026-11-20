@@ -149,8 +149,8 @@ def analyze(raw_target: str, *, browser: str | None = None, llm: LLMConfig | Non
                     raise
                 why = "permission denied" if isinstance(e, PermissionError) or "denied" in str(e).lower() else str(e)
                 log(f"  installed copy unreadable ({why}); analysing the {lookup.browser} store copy instead")
-                info.context["Analysed copy"] = (f"store version (the installed copy couldn't be read: {why}; "
-                                                 "usually antivirus or browser-profile protection)")
+                info.context["Analysed copy"] = ("store version (installed copy is read-protected, usually by "
+                                                 "antivirus or browser-profile protection)")
                 t, fell_back = lookup, True
         if t.kind == "dir":
             info.sha256 = tree_hash(root)
@@ -229,7 +229,8 @@ def analyze(raw_target: str, *, browser: str | None = None, llm: LLMConfig | Non
         fut_hist = fut_rep = fut_intel = None
         if intel and info.ext_id:
             fut_intel = pool.submit(check_intel, info.browser, info.ext_id, info.sha256,
-                                    info.store.get("guid") or gecko.get("id", ""), intel_refresh)
+                                    info.store.get("guid") or gecko.get("id", ""), intel_refresh,
+                                    version=info.version)
         if lookup and archive and info.browser in ("chrome", "firefox") and not info.store.get("removed"):
             slug = info.store.get("slug") or ("" if info.browser == "chrome" else lookup.ext_id)
             fut_hist = pool.submit(publisher_history, info.browser, info.ext_id, slug, log)
@@ -244,7 +245,7 @@ def analyze(raw_target: str, *, browser: str | None = None, llm: LLMConfig | Non
         findings += cs.findings
         findings += endpoint_findings(cs.endpoints)
         pub, good = publisher_findings(info.store, sideloaded=lookup is None, browser=info.browser,
-                                       local_version=info.version if t.kind != "store" else "")
+                                       local_version=info.version if t.kind != "store" else "", ext_id=info.ext_id)
         findings += pub
         hist = _result(fut_hist, {})
         intel_res = _result(fut_intel, {})

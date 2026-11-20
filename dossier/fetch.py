@@ -293,6 +293,15 @@ def _chrome_meta(ext_id: str) -> dict:
             out["rating_count"] = int(float(m.group(1)) * mult)
         elif ln in ("Trader", "Non-trader"):
             out["trader_status"] = ln
+        elif ln.startswith("Created by the owner of the listed website") and i < 60:
+            # Google-verified publisher domain, e.g. "obsidian.md"; shown under the title.
+            dom = next((x for x in main[i + 1:i + 4] if re.fullmatch(r"[a-z0-9.-]+\.[a-z]{2,}", x, re.I)), None)
+            if dom:
+                out["verified_domain"] = dom
+            if "good record" in ln:
+                out.setdefault("badges", []).append("publisher with good record")
+        elif ln == "Developer" and i + 1 < len(main) and main[i + 1] in _CHROME_LABELS:
+            pass   # non-trader listing with no name in the Developer block
         elif ln == "Developer" and i + 1 < len(main) and "publisher" not in out:
             # Developer block: name, then postal address lines (traders), then Website/Email/Phone labels.
             out["publisher"] = main[i + 1]
@@ -319,6 +328,10 @@ def _chrome_meta(ext_id: str) -> dict:
     m = re.search(r'href="(https?://[^"]+)"[^>]*>\s*(?:<[^>]+>\s*)*Privacy policy', raw, re.I)
     if m:
         out["privacy_url"] = html.unescape(m.group(1))
+    if "publisher" not in out and out.get("verified_domain"):
+        out["publisher"] = out["verified_domain"]
+    if "publisher_url" not in out and out.get("verified_domain"):
+        out["publisher_url"] = "https://" + out["verified_domain"]
     if "users" not in out and "name" not in out:
         if '<meta property="og:title" content="Chrome Web Store"' in raw:
             return {"store": "Chrome Web Store", "removed": True}

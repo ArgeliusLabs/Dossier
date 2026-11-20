@@ -86,10 +86,18 @@ def _age_days(iso: str | None) -> int | None:
         return None
 
 
-def publisher_findings(store: dict, sideloaded: bool, browser: str = "", local_version: str = "") -> tuple[list[Finding], list[str]]:
+def publisher_findings(store: dict, sideloaded: bool, browser: str = "", local_version: str = "",
+                       ext_id: str = "") -> tuple[list[Finding], list[str]]:
     """Returns (findings, positive trust signals)."""
+    from .knowledge import BUILTIN_EXTENSIONS
     f: list[Finding] = []
     good: list[str] = []
+    if ext_id in BUILTIN_EXTENSIONS:
+        f.append(Finding("pub.builtin", "trust", "info", "Built-in browser component",
+                         f"{BUILTIN_EXTENSIONS[ext_id]}: installed and updated by the browser itself, so it has no normal "
+                         "store listing. Its code is still analysed like any other extension.", []))
+        good.append("Built-in component shipped by the browser vendor.")
+        return f, good
     if store.get("removed"):
         if browser == "firefox":
             f.append(Finding("pub.not_listed", "trust", "medium", "Not listed on addons.mozilla.org",
@@ -176,6 +184,17 @@ RED_FLAG_RULES = {"intel.known_bad", "pub.owner_changed", "pub.removed", "pub.di
 MAX_CREDIT = 12
 
 
+def red_flags(findings: list[Finding]) -> set[str]:
+    """Warning signs that rule out trust credits and the 'powerful by design' framing.
+
+    A flag the AI marked as less serious or probably benign doesn't count, and web reports only count when serious
+    (high): e.g. an old, fixed bug report is context, not a red flag.
+    """
+    return {f.rule for f in findings
+            if f.rule in RED_FLAG_RULES and f.llm_verdict not in ("likely_benign", "downgrade")
+            and not (f.rule == "web.reported_concerns" and f.severity != "high")}
+
+
 def trust_credits(findings: list[Finding], ctx: dict | None, behaviour: float) -> list[tuple[str, int]]:
     """Reassuring evidence that offsets *capability* for extensions whose code looks clean.
 
@@ -183,8 +202,7 @@ def trust_credits(findings: list[Finding], ctx: dict | None, behaviour: float) -
     for bad behaviour; it only stops a well-established, well-behaved extension from being scored like an unknown one.
     """
     ctx = ctx or {}
-    active = {f.rule for f in findings if f.llm_verdict != "likely_benign"}
-    if behaviour >= 25 or active & RED_FLAG_RULES:
+    if behaviour >= 25 or red_flags(findings):
         return []
     out: list[tuple[str, int]] = []
     years = ctx.get("stable_publisher_years") or 0
@@ -230,8 +248,7 @@ def compute_scores(findings: list[Finding], ctx: dict | None = None) -> dict:
             "overall": overall, "verdict": verdict, "credits": credits, "credit_applied": credit,
             "proportionate": bool(credit) and cap >= 30,
             # High/Severe purely from the amount of power it has, with none of the warning signs of abuse.
-            "by_design": verdict in ("High", "Severe") and not ({f.rule for f in findings if f.llm_verdict != "likely_benign"}
-                                                                & RED_FLAG_RULES)}
+            "by_design": verdict in ("High", "Severe") and not red_flags(findings)}
 
 
 def assign_ids(findings: list[Finding]) -> list[Finding]:

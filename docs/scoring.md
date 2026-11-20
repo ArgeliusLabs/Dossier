@@ -49,8 +49,18 @@ obfuscation, off-store updates, sourced web concerns), these credits apply, capp
 | Web reputation search found no security or privacy concerns | 2 |
 | No analytics, ad or tracking services in the code (only alongside at least one credit above) | 3 |
 
+Red flags the AI analyst marks as less serious, and web reports that aren't serious (for example a bug fixed in an
+older version), don't block credits.
+
 The score can't drop below 35% of the capability score, so the access never disappears from view. When credits bring
 a broad-access extension down, the report says so: *"Broad access, used proportionately"*, and lists each credit.
+
+### How findings are presented
+
+Reports split findings into **What it does** (behaviour, network, publisher, reputation) and **What it can do**
+(permissions and access). When there are no red flags, access findings are shown with a neutral "Access" label
+instead of a red severity pill: they are facts about what the extension is able to do, not accusations. They still
+count towards the capability score.
 
 ### Powerful by design
 

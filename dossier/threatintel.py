@@ -100,7 +100,8 @@ def _parse_mozilla_legacy(raw: bytes) -> dict:
     for r in json.loads(raw.decode("utf-8", "replace")).get("data", []):
         guid = r.get("guid") or ""
         det = r.get("details") or {}
-        entry = {"name": det.get("name", "")[:120], "reason": (det.get("why") or "")[:300],
+        ranges = [[v.get("minVersion", "0"), v.get("maxVersion", "*")] for v in r.get("versionRange") or []]
+        entry = {"name": det.get("name", "")[:120], "reason": (det.get("why") or "")[:300], "ranges": ranges,
                  "links": [det["bug"]] if str(det.get("bug", "")).startswith("http") else [],
                  "added": time.strftime("%Y-%m-%d", time.gmtime((r.get("last_modified") or 0) / 1000))}
         if guid.startswith("/") and guid.endswith("/"):
@@ -186,8 +187,25 @@ def _amo_block_locked(guid: str) -> dict | None:
 
 # ------------------------------------------------------------------ matching ------------
 
+def _vkey(v: str) -> list:
+    return [int(x) if x.isdigit() else 0 for x in re.split(r"[.\-+]", str(v)) if x != ""]
+
+
+def _in_ranges(version: str, ranges: list) -> bool:
+    """Legacy blocklist version ranges; no ranges or no version known means 'applies'."""
+    if not ranges or not version:
+        return True
+    for lo, hi in ranges:
+        if (lo in ("0", "", None) or _vkey(version) >= _vkey(lo)) and (hi in ("*", "", None) or _vkey(version) <= _vkey(hi)):
+            return True
+    return False
+
+
+ADMIN_REASONS = re.compile(r"version deleted|deleted by (?:the )?developer|duplicate|re-?upload", re.I)
+
+
 def check(browser: str, ext_id: str, sha256: str = "", guid: str = "", refresh: bool = False,
-          offline: bool = False) -> dict:
+          offline: bool = False, version: str = "") -> dict:
     """Returns {"hits": [...], "sources": [status...]}. Never raises."""
     hits, statuses = [], []
     ext_id = (ext_id or "").strip()
@@ -214,13 +232,16 @@ def check(browser: str, ext_id: str, sha256: str = "", guid: str = "", refresh: 
                         break
                 except re.error:
                     continue
-        if e:
+        if e and _in_ranges(version, e.get("ranges")):
             hits.append({"source": "mozilla_legacy", "label": st["label"], "home": st["home"], "blocked": True, **e})
         if not offline:
             b = _amo_block(gid)
             statuses.append({"label": "Mozilla add-on blocklist (live)", "home": "https://addons.mozilla.org/",
                              "fetched": time.time(), "stale": False})
-            if b:
+            versions = set(b.get("blocked") or []) | set(b.get("soft_blocked") or []) if b else set()
+            applies = b and (b.get("is_all_versions") or not version or version in versions)
+            # Mozilla also "blocks" individual versions for housekeeping (e.g. a deleted upload): not a security signal.
+            if applies and not (ADMIN_REASONS.search(b.get("reason") or "") and not b.get("is_all_versions")):
                 hits.append({"source": "mozilla", "label": "Mozilla add-on blocklist", "home": "https://addons.mozilla.org/",
                              "name": next(iter((b.get("addon_name") or {}).values()), "") if isinstance(b.get("addon_name"), dict) else "",
                              "reason": (b.get("reason") or "")[:300], "added": (b.get("created") or "")[:10],
