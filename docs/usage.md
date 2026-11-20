@@ -62,8 +62,16 @@ Windows, macOS and Linux. For each extension it:
   because takedowns are frequently for malware; Medium for Firefox, where self-distributed add-ons are common) and
   version mismatches.
 
-Profiles are only read. A running browser can lock some profile files; the scan still works, but the enabled state may
-show as unknown.
+Profiles are only read, never modified. Each installed copy is first copied into a private temp folder, skipping any
+file that can't be read.
+
+**Locked profiles.** Antivirus browser protection (e.g. ESET), endpoint security, or a sandboxed terminal can let
+Dossier *list* the extension folders but refuse to *read* them ("Permission denied"). When the installed copy can't be
+read, Dossier analyses the store's current copy of the same ID instead (trying the Chrome Web Store for Edge installs
+that came from there) and the report header says **Analysed copy: store version**. Compare it with the
+**Installed version** shown next to it. Extensions that are locked *and* not on any store (built-in components,
+unlisted or removed extensions) are listed under "Could not analyse"; copy their folder somewhere readable and pass
+that path, or run Dossier where the profile is readable.
 
 ## Known-malicious lists
 

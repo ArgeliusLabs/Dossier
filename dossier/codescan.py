@@ -344,7 +344,8 @@ OBFUSCATION_MARKERS = [
     ("javascript-obfuscator (_0x names)", re.compile(r"\b_0x[0-9a-f]{4,6}\b"), 25),
     ("Dean Edwards packer", re.compile(r"eval\(function\(p,a,c,k,e,[dr]\)"), 1),
     ("JSFuck", re.compile(r"\[\]\[\(!\[\]\+\[\]\)"), 1),
-    ("hex-escaped strings", re.compile(r"(?:\\x[0-9a-fA-F]{2}){8,}"), 40),
+    # Printable-ASCII escapes only (\x20-\x7e): hidden code/strings. High-byte runs are charset tables, not obfuscation.
+    ("hex-escaped strings", re.compile(r"(?:\\x[2-7][0-9a-fA-F]){8,}"), 40),
     # Numbers hidden in strings, e.g. parseInt("21600000") for a 6-hour timer: hides intervals and sizes from review.
     ("numeric constants hidden in strings", re.compile(r"parseInt\(\s*[\"']\d{3,}[\"']\s*\)"), 6),
 ]

@@ -110,7 +110,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         for x in found:
             ctx = {"Installed in": f"{x.browser.capitalize()} · profile '{x.profile}'",
-                   "State": {True: "enabled", False: "disabled", None: "unknown"}[x.enabled]}
+                   "State": {True: "enabled", False: "disabled", None: "unknown"}[x.enabled],
+                   "Installed version": x.version or "?"}
             jobs.append((str(x.path), {"store_lookup": (x.store, x.ext_id), "context": ctx}, f"{x.browser}_{x.profile}"))
     jobs += [(t, {"browser": a.browser}, "") for t in a.targets]
     if not jobs:

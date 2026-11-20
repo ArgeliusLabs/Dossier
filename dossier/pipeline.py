@@ -13,7 +13,7 @@ from typing import Callable
 from . import __version__
 from .codescan import scan
 from .config import LLMConfig
-from .fetch import Target, chrome_store_url, download_package, edge_store_url, fetch_store_metadata, resolve_target
+from .fetch import FetchError, Target, chrome_store_url, download_package, edge_store_url, fetch_store_metadata, resolve_target
 from .knowledge import registrable_domain
 from .llm import apply_triage, run_llm
 from .manifest import analyze_manifest, build_permissions, icon_data_uri, load_manifest, resolve_i18n
@@ -70,6 +70,37 @@ def _result(fut, default):
         return {"error": f"lookup failed: {e}"} if isinstance(default, dict) else default
 
 
+def _as_chrome(t: Target) -> Target:
+    return Target("store", "chrome", t.ext_id, store_url=chrome_store_url(t.ext_id), raw=t.ext_id)
+
+
+class LocalReadError(OSError):
+    pass
+
+
+def copy_readable(src: Path, dest: Path) -> tuple[Path, list[str]]:
+    """Copy an unpacked extension to a private temp folder, skipping files that can't be read.
+
+    Raises LocalReadError if manifest.json itself is unreadable (nothing useful can be analysed).
+    """
+    skipped: list[str] = []
+    for p in src.rglob("*"):
+        try:
+            if not p.is_file() or p.is_symlink():
+                continue
+            rel = p.relative_to(src)
+            data = p.read_bytes()
+        except OSError:
+            skipped.append(str(p.relative_to(src)))
+            continue
+        out = dest / rel
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(data)
+    if not (dest / "manifest.json").is_file():
+        raise LocalReadError(f"manifest.json unreadable ({len(skipped)} files locked)")
+    return dest, skipped
+
+
 def tree_hash(root: Path) -> str:
     """Content hash of an unpacked extension (store-added _metadata excluded) so folders can be change-tracked."""
     h = hashlib.sha256()
@@ -102,14 +133,49 @@ def analyze(raw_target: str, *, browser: str | None = None, llm: LLMConfig | Non
         lookup = Target("store", sb, sid, store_url=url, raw=sid)
         info.browser, info.ext_id, info.store_url = sb, sid, url
     work = Path(tempfile.mkdtemp(prefix="dossier_"))
+    unreadable: list[str] = []
+    fell_back = False
     try:
+        if t.kind in ("dir", "file"):
+            # Installed copies live in browser profiles that security software (or a sandbox) may lock. Copy what we
+            # can read; if the essentials are unreadable, fall back to the store's copy of the same extension.
+            try:
+                if t.kind == "dir":
+                    root, unreadable = copy_readable(find_manifest_root(t.path), work / "local")
+                else:
+                    t.path.read_bytes()[:1]
+            except (PermissionError, LocalReadError, OSError) as e:
+                if not lookup:
+                    raise
+                why = "permission denied" if isinstance(e, PermissionError) or "denied" in str(e).lower() else str(e)
+                log(f"  installed copy unreadable ({why}); analysing the {lookup.browser} store copy instead")
+                info.context["Analysed copy"] = (f"store version (the installed copy couldn't be read: {why}; "
+                                                 "usually antivirus or browser-profile protection)")
+                t, fell_back = lookup, True
         if t.kind == "dir":
-            root = find_manifest_root(t.path)
             info.sha256 = tree_hash(root)
+            if unreadable:
+                info.context["Unreadable files"] = f"{len(unreadable)} skipped (locked or access denied)"
         else:
             if t.kind == "store":
                 log(f"Downloading {t.browser} extension {t.ext_id} ...")
-                data = download_package(t)
+                try:
+                    try:
+                        data = download_package(t)
+                    except FetchError:
+                        if not (fell_back and t.browser == "edge"):
+                            raise
+                        # Edge users often install from the Chrome Web Store: try the same ID there.
+                        t = lookup = _as_chrome(t)
+                        info.browser, info.store_url = "chrome", t.store_url
+                        data = download_package(t)
+                except FetchError as e:
+                    if not fell_back:
+                        raise
+                    raise FetchError(
+                        "the installed copy can't be read (access denied, usually antivirus or browser-profile "
+                        "protection) and the store has no downloadable copy (unlisted, removed, or a built-in "
+                        f"component). Copy the folder somewhere readable and analyse that, or allow access. ({e})") from e
             else:
                 data = t.path.read_bytes()
             info.sha256 = hashlib.sha256(data).hexdigest()
@@ -142,6 +208,14 @@ def analyze(raw_target: str, *, browser: str | None = None, llm: LLMConfig | Non
         if lookup:
             log("Fetching store metadata ...")
             info.store = fetch_store_metadata(lookup)
+            if lookup.browser == "edge" and info.store.get("removed"):
+                # Not on Edge Add-ons: an Edge install from the Chrome Web Store is common, so check there before
+                # calling it removed.
+                chrome_meta = fetch_store_metadata(_as_chrome(lookup))
+                if not chrome_meta.get("removed") and not chrome_meta.get("error"):
+                    lookup = _as_chrome(lookup)
+                    info.store, info.store_url = chrome_meta, lookup.store_url
+                    info.context["Installed from"] = "Chrome Web Store (into Edge)"
 
         first_party = {d for d in (_domain_of(info.homepage), _domain_of(info.store.get("publisher_url", "")),
                                    _domain_of(manifest.get("update_url", ""))) if d}

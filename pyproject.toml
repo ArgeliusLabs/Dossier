@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dossier"
-version = "1.6.1"
+version = "1.6.2"
 description = "OPSEC-focused risk analysis of Chrome, Edge and Firefox extensions, with a self-contained HTML report."
 readme = "README.md"
 requires-python = ">=3.10"

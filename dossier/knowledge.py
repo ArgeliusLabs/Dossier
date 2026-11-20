@@ -204,7 +204,7 @@ TRACKERS: dict[str, tuple[str, str]] = {
     "cdn.segment.com": ("analytics", "Segment"),
     "api.segment.io": ("analytics", "Segment"),
     "rudderstack.com": ("analytics", "RudderStack"),
-    "growthbook.io": ("analytics", "GrowthBook"),
+    "growthbook.io": ("remote_config", "GrowthBook (feature flags)"),
     "launchdarkly.com": ("remote_config", "LaunchDarkly (remote feature flags)"),
     "optimizely.com": ("remote_config", "Optimizely"),
     "statsig.com": ("remote_config", "Statsig"),

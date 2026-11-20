@@ -107,7 +107,7 @@ dossier suspicious.crx thing.xpi ./unpacked-extension/
 
 # Everything installed in your browser profiles, with a summary dashboard
 dossier --list-installed
-dossier --installed --open
+dossier --installed --open          # locked profiles (antivirus/sandbox) fall back to the store copy
 
 # Static only, nothing sent to an LLM
 dossier <target> --no-llm
