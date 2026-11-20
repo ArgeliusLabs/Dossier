@@ -10,13 +10,22 @@ don't want linked. It was written as a replacement for scanners that bury the on
 of "IP addresses" that are version numbers, "Bitcoin addresses" that are hashes, and `eval()` calls inside jQuery.
 
 ```
-Urban VPN Proxy 5.15.1 [chrome]  ->  Severe risk (overall 69/100, capability 62, behaviour 55)
-  [HIGH    ] Disables or removes other extensions
-  [HIGH    ] Routes your traffic through a proxy
-  [HIGH    ] Hooks the website's own network functions
-  AI: A full-traffic proxy extension with broad page access, remote configuration, analytics, and the
-      ability to disable other extensions.
+> dossier ofaokhiedipichpaobibbnahnkdoiiah
+Instant Data Scraper 1.10.2 [chrome]  ->  Severe risk (overall 71/100, capability 38, behaviour 62)
+  [HIGH    ] Reads form/POST data you submit
+  [HIGH    ] Its own text says it collects your browsing data
+  [HIGH    ] Code is deliberately obfuscated
+  [HIGH    ] The extension has changed owners
+  AI: Popular data-scraping extension with broad site access, request interception, analytics, and a
+      documented ownership change to a new publisher.
+
+> dossier ddkjiahejlhfcafbddmgiahcphecmpfh
+uBlock Origin Lite 2026.1116.1650 [chrome]  ->  Low risk (overall 12/100, capability 33, behaviour 3)
 ```
+
+The first was a trusted, featured OSINT staple until it was quietly sold in early 2026; the store listing still shows
+its old 4.9 rating and Featured badge. The second can see every site you visit too, and Dossier explains why that
+access is proportionate.
 
 ## Contents
 
@@ -45,7 +54,7 @@ Every report answers four questions, then adds the OPSEC angles generic scanners
 
 Each report also has:
 
-- **Three scores**: capability (what it *could* do), behaviour (what the code *appears* to do), publisher concerns, plus an overall Low / Moderate / High / Severe verdict. See [docs/scoring.md](docs/scoring.md).
+- **Three scores**: capability (what it *could* do), behaviour (what the code *appears* to do), publisher concerns, plus an overall Low / Moderate / High / Severe verdict. Established, clean extensions earn trust credits ("broad access, used proportionately"), and powerful tools with no warning signs, such as password managers, are labelled *High exposure: powerful by design* rather than accused of anything. See [docs/scoring.md](docs/scoring.md).
 - **An AI analyst section** (optional): plain-language summary, whether the access is proportionate to the stated purpose, likely data flows, and a false-positive triage of every finding.
 - **"What changed"**: when you re-audit an extension, Dossier compares against the previous audit and highlights new permissions, new trackers, a new publisher (the classic bought-and-weaponised pattern) or a silent repack.
 - **"Noise we filtered out"**: a count of everything deliberately ignored, and why, so nothing is hidden silently.

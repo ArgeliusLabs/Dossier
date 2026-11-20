@@ -50,7 +50,9 @@ def render_summary(rows: list[dict], title: str = "Extension audit") -> str:
                         + e(", ".join(sorted({h["label"] for h in res.intel["hits"]}))) + "</div>")
         body.append(
             f"<tr><td data-v='{res.score}'><span class='score' style='background:{_color_for(res.score)}'>{res.score}</span></td>"
-            f"<td data-v='{ORDER.get(res.verdict, 9)}'><b style='color:{_color_for(res.score)}'>{e(res.verdict)}</b></td>"
+            f"<td data-v='{ORDER.get(res.verdict, 9)}'><b style='color:{_color_for(res.score)}'>{e(res.verdict)}</b>"
+            + ("<div class='muted small'>by design</div>" if res.file_stats.get("scores", {}).get("by_design") else "")
+            + "</td>"
             f"<td>{icon} <a href='{e(r['file'])}'><b>{e(i.name)}</b></a> <span class='muted small mono'>{e(i.version)}</span>"
             f"{removed}{chg}<div class='muted small'>{e(res.llm.get('headline', ''))}</div></td>"
             f"<td class='small'>{e(where)}{('<div class=muted>' + e(state) + '</div>') if state else ''}</td>"

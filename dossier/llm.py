@@ -163,6 +163,8 @@ def apply_triage(r: AnalysisResult) -> None:
     by_id = {f.id: f for f in r.findings}
     for t in r.llm.get("finding_triage", []):
         f = by_id.get(t["id"])
+        if f and f.severity == "info":
+            continue   # context (e.g. "same publisher since 2022"), not a risk to triage
         if f and t["verdict"] in ("confirmed", "downgrade", "likely_benign"):
             # Capability facts from the manifest are not something an LLM can "dismiss".
             if t["verdict"] != "confirmed" and (f.category == "threat_intel" or (

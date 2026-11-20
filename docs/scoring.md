@@ -52,6 +52,14 @@ obfuscation, off-store updates, sourced web concerns), these credits apply, capp
 The score can't drop below 35% of the capability score, so the access never disappears from view. When credits bring
 a broad-access extension down, the report says so: *"Broad access, used proportionately"*, and lists each credit.
 
+### Powerful by design
+
+Some legitimate tools need enormous access: a password manager reads every login form, the clipboard and the screen,
+and talks to a desktop app. When an extension rates High or Severe **without any red flag** (the list above), the
+report calls it **High exposure** instead of High risk, and says so plainly: it is powerful by design, nothing suggests
+abuse, and the rating describes how much it could expose if it were compromised or sold. The score itself doesn't
+change: in an investigation profile, that exposure is real either way.
+
 | Overall | Verdict | Meaning |
 |---|---|---|
 | 0-17 | **Low** | Little here should worry an OPSEC-conscious user |

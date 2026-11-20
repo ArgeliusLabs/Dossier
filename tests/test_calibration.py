@@ -89,3 +89,12 @@ def test_user_scripts_from_local_settings_are_low(make_ext):
     res = analyze(str(make_ext({**MV3_BASE, "background": {"service_worker": "bg.js"}}, {"bg.js": src})),
                   log=lambda *_: None)
     assert next(f for f in res.findings if f.rule == "code.user_scripts").severity == "low"
+
+
+def test_powerful_but_clean_tools_are_framed_as_by_design():
+    heavy = BROAD + [F("ctl.native", "control", "high"), F("data.clipboard_read", "data_access", "medium"),
+                     F("data.screenshot", "data_access", "medium"), F("code.exec_code_string", "remote_code", "high")]
+    s = compute_scores(heavy, CLEAN_CTX)
+    assert s["verdict"] == "High" and s["by_design"]
+    s = compute_scores(heavy + [F("net.analytics", "network", "medium")], CLEAN_CTX)
+    assert not s["by_design"]

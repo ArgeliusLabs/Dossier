@@ -228,7 +228,10 @@ def compute_scores(findings: list[Finding], ctx: dict | None = None) -> dict:
         verdict = "Low"
     return {"capability": round(cap), "behaviour": round(beh), "trust_penalty": round(trust),
             "overall": overall, "verdict": verdict, "credits": credits, "credit_applied": credit,
-            "proportionate": bool(credit) and cap >= 30}
+            "proportionate": bool(credit) and cap >= 30,
+            # High/Severe purely from the amount of power it has, with none of the warning signs of abuse.
+            "by_design": verdict in ("High", "Severe") and not ({f.rule for f in findings if f.llm_verdict != "likely_benign"}
+                                                                & RED_FLAG_RULES)}
 
 
 def assign_ids(findings: list[Finding]) -> list[Finding]:

@@ -179,7 +179,8 @@ def main(argv: list[str] | None = None) -> int:
         rows.append({"result": res, "file": out_html.name})
         top = [f for f in res.findings if f.severity in ("critical", "high") and f.llm_verdict != "likely_benign"]
         sys.stderr.flush()
-        print(f"{res.info.name} {res.info.version} [{res.info.browser}]  ->  {res.verdict} risk "
+        label = "exposure (powerful by design, no signs of abuse)" if sc.get("by_design") else "risk"
+        print(f"{res.info.name} {res.info.version} [{res.info.browser}]  ->  {res.verdict} {label} "
               f"(overall {sc.get('overall')}/100, capability {sc.get('capability')}, behaviour {sc.get('behaviour')})")
         for f in top[:6]:
             print(f"  [{f.severity.upper():8}] {f.title}")
